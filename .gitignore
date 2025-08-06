@@ -1,0 +1,6 @@
+# Exclude temporary and sensitive data
+projects/
+shell-snapshots/
+ide/
+statsig/
+todos/

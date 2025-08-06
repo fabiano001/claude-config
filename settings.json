@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "bash",
+      "read",
+      "write",
+      "edit",
+      "multiedit",
+      "ls",
+      "glob",
+      "grep",
+      "todo_write",
+      "task",
+      "web_fetch",
+      "web_search",
+      "notebook_read",
+      "notebook_edit",
+      "exit_plan_mode",
+      "bash:git:status",
+      "bash:git:add",
+      "bash:git:commit",
+      "bash:git:push",
+      "bash:git:pull",
+      "bash:git:fetch",
+      "bash:git:merge",
+      "bash:git:branch",
+      "bash:git:checkout",
+      "bash:npm:install",
+      "bash:npm:run",
+      "bash:npm:test",
+      "bash:npm:build",
+      "bash:npx:firebase",
+      "bash:firebase:deploy",
+      "bash:firebase:emulators:start"
+    ],
+    "defaultMode": "acceptEdits"
+  },
+  "feedbackSurveyState": {
+    "lastShownTime": 1754075306640
+  }
+}
