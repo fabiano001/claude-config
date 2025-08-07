@@ -6,5 +6,3 @@ statsig/
 todos/
 
 # Symbolic links to ~/.claude directories
-agents
-commands
