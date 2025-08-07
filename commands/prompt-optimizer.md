@@ -56,10 +56,4 @@ Calculate Total Score = Clarity + Completeness + Robustness + (Efficiency × 0.5
 - **NEVER** pick prompts requesting minimal output *without* thinking/work.  
 - Prefer prompts that guide step-by-step thinking (helps weaker models).  
 - Precision tasks **must** include verification or thinking tags.  
-- A verbose but accurate result is better than a concise but wrong one.  
-
-**Ideal template** (especially for smaller models):
-
-1. Clear task description  
-2. Thinking tags or work-requirement for reasoning  
-3. Explicit final answer format specification
+- A verbose but accurate result is better than a concise but wrong one.
