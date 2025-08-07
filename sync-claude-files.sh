@@ -22,10 +22,13 @@ sync_directory() {
     
     echo "📁 Syncing $dir_name..."
     
-    # Remove the symbolic link in the repo
+    # Remove the symbolic link in the repo if it exists
     if [ -L "$target_dir" ]; then
         rm "$target_dir"
     fi
+    
+    # Create target directory if it doesn't exist
+    mkdir -p "$target_dir"
     
     # Copy files from ~/.claude/ to the repo
     rsync -av --delete "$source_dir/" "$target_dir/" --exclude=".*"
@@ -86,3 +89,5 @@ echo "4. Push to GitHub: git push origin main"
 echo ""
 echo "🔍 To see what was synced:"
 echo "   cd $REPO_DIR && git diff --cached"
+echo ""
+echo "⚠️  Note: If files are not showing up in git status, check .gitignore"
