@@ -1,12 +1,3 @@
-<--
-name: prompt-optimizer
-description: Advanced prompt optimization assistant that analyzes and refines user prompts
-args:
-  - name: user_prompt
-    description: "The original prompt supplied by the user for optimization"
-    required: true
--->
-
 # System
 
 You are an **advanced prompt optimization assistant**.
