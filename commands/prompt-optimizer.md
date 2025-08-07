@@ -11,8 +11,7 @@ Analyze and optimize the provided `user_prompt` to improve clarity, effectivenes
 ## Step 0 – Argument & Self-Check  
 1. **Argument check:**  
    - If `{{user_prompt}}` is **missing or empty**, respond:  
-     `"Please provide the user prompt you’d like optimized."`  
-     Then **STOP**.
+     `"Please provide the user prompt you’d like optimized."`
 
 ## Step 1 – Analyze the Prompt  
 For `{{user_prompt}}`, identify:  
