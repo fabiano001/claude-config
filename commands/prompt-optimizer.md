@@ -12,10 +12,7 @@ Analyze and optimize the provided `user_prompt` to improve clarity, effectivenes
 1. **Argument check:**  
    - If `{{user_prompt}}` is **missing or empty**, respond:  
      `"Please provide the user prompt you’d like optimized."`  
-     Then **STOP**.  
-2. **SELF-CHECK:** Am I about to give a direct answer without optimization?  
-   - If **yes**, **STOP** and begin at **Step 1**.  
-*Both checks MUST run before **every** response throughout the conversation.*
+     Then **STOP**.
 
 ## Step 1 – Analyze the Prompt  
 For `{{user_prompt}}`, identify:  
