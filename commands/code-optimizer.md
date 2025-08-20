@@ -91,7 +91,49 @@ Execute commands only if permitted by Claude Code tool permissions (`~/.claude/s
 4. **Task Breakdown (TDD-first)** – tests/benchmarks, code changes.  
 5. **Commands (per tool permissions)** – build/lint/typecheck/test/bench.  
 6. **Plan Review Loop Prompt**  
-   - “What changes would you like to make to the optimization plan? Reply with edits, or say ‘no’ / ‘no further changes’ to proceed.”
+   - "What changes would you like to make to the optimization plan? Reply with edits, or say 'no' / 'no further changes' to proceed."
+
+---
+
+## React-Specific Optimization Checks
+
+### React Hooks Compliance
+- **Rules of Hooks Violations**  
+  - Hooks called inside loops, conditions, or nested functions  
+  - Hooks called from regular JavaScript functions (not React components/hooks)  
+  - Inconsistent hook call order between renders  
+
+- **Infinite Loop Prevention**  
+  - State setters included in `useEffect` dependency arrays  
+  - Objects/functions created during render used as dependencies  
+  - Missing dependencies causing stale closures  
+  - Reactive values read without proper dependency handling  
+
+### React Performance Patterns
+- **Unnecessary Re-renders**  
+  - Missing `React.memo` for expensive components  
+  - Inline object/function creation in props  
+  - Missing `useMemo`/`useCallback` for expensive computations  
+  - Key prop issues in lists causing reconciliation problems  
+
+- **Component Structure & Readability**  
+  - Oversized components (>200 lines) with mixed concerns  
+  - Complex logic that should be extracted to custom hooks  
+  - Business logic mixed with presentation logic  
+  - Missing component composition patterns  
+
+### Code Quality & DRY Principles
+- **DRY Violations**  
+  - Repeated JSX patterns that could be componentized  
+  - Duplicate hooks logic across components  
+  - Repeated validation or formatting logic  
+  - Copy-pasted event handlers or form logic  
+
+- **Elegant Code Patterns**  
+  - Large components with inline functions (extract to utils)  
+  - Complex conditional rendering (extract to sub-components)  
+  - Deeply nested component hierarchies (flatten with composition)  
+  - Hard-coded values that should be constants or config
 
 ---
 
