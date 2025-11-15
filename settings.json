@@ -6,9 +6,6 @@
       "MultiEdit(**)",
       "NotebookEdit(**)",
       "Bash(git status:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(git push:*)",
       "Bash(git pull:*)",
       "Bash(git fetch:*)",
       "Bash(git merge:*)",
@@ -22,8 +19,23 @@
       "Bash(firebase deploy:*)",
       "Bash(firebase emulators:start:*)",
       "WebFetch(domain:github.com)",
-      "WebSearch"
+      "WebSearch",
+      "mcp__atlassian__search",
+      "mcp__atlassian__searchJiraIssuesUsingJql",
+      "mcp__atlassian__getJiraIssue",
+      "mcp__atlassian__editJiraIssue",
+      "mcp__atlassian__getAccessibleAtlassianResources",
+      "mcp__context7__*",
+      "mcp__sequential-thinking__*"
     ],
     "defaultMode": "acceptEdits"
+  },
+  "alwaysThinkingEnabled": true,
+  "env": {
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "OTEL_METRICS_EXPORTER": "otlp",
+    "OTEL_EXPORTER_OTLP_PROTOCOL": "http/json",
+    "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "https://app.jellyfish.co/ingest-webhooks/claude/2182",
+    "OTEL_EXPORTER_OTLP_HEADERS": "Authorization=Bearer jf_xb-onYd_M7Zko6UVbZKLhGbbfZSb6OplHF-8gnz2AzE"
   }
 }
