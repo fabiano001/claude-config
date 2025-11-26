@@ -1,4 +1,11 @@
 {
+  "env": {
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "OTEL_METRICS_EXPORTER": "otlp",
+    "OTEL_EXPORTER_OTLP_PROTOCOL": "http/json",
+    "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "https://app.jellyfish.co/ingest-webhooks/claude/2182",
+    "OTEL_EXPORTER_OTLP_HEADERS": "Authorization=Bearer jf_xb-onYd_M7Zko6UVbZKLhGbbfZSb6OplHF-8gnz2AzE"
+  },
   "permissions": {
     "allow": [
       "Edit(**)",
@@ -14,6 +21,8 @@
       "Bash(npm install:*)",
       "Bash(npm run:*)",
       "Bash(npm test:*)",
+      "Bash(CI=true npm test:*)",
+      "Bash(env CI=true npm test:*)",
       "Bash(npm run build:*)",
       "Bash(npx firebase:*)",
       "Bash(firebase deploy:*)",
@@ -30,12 +39,5 @@
     ],
     "defaultMode": "acceptEdits"
   },
-  "alwaysThinkingEnabled": true,
-  "env": {
-    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
-    "OTEL_METRICS_EXPORTER": "otlp",
-    "OTEL_EXPORTER_OTLP_PROTOCOL": "http/json",
-    "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "https://app.jellyfish.co/ingest-webhooks/claude/2182",
-    "OTEL_EXPORTER_OTLP_HEADERS": "Authorization=Bearer jf_xb-onYd_M7Zko6UVbZKLhGbbfZSb6OplHF-8gnz2AzE"
-  }
+  "alwaysThinkingEnabled": false
 }

@@ -105,16 +105,31 @@ Propose the following commands (adapt to workspace). **Execute them in accordanc
 ## Planning blueprint (output before coding)
 **Produce this plan first**, then enter the **Plan review loop**:
 
-1) **Summary**  
+1) **HIGH LEVEL PLAN**
+   - A concise, executive summary of the implementation tasks only
+   - Skip ticket details - jump straight into the task list
+   - Use shortened, succinct task descriptions for quick review
+   - Format as a numbered list with 1-2 line descriptions per task
+   - Example format:
+     ```
+     ## HIGH LEVEL PLAN
+     1. Write tests for user authentication flow (auth.test.ts)
+     2. Implement JWT token generation (auth.service.ts)
+     3. Add login endpoint with validation (auth.controller.ts)
+     4. Update middleware to verify tokens (auth.middleware.ts)
+     5. Run full test suite and verify green
+     ```
+
+2) **Summary**
    - Restate ticket name, description, user story (if provided), and constraints succinctly.
 
-2) **Acceptance Criteria → Test Mapping**  
+3) **Acceptance Criteria → Test Mapping**
    - For each acceptance bullet, list the test(s) that will verify it (names, locations).
 
-3) **Design choice (brief)**  
+4) **Design choice (brief)**
    - Present 1–2 viable approaches; pick the **smallest-diff, lowest-risk** default.
 
-4) **Task Breakdown (TDD-first)**  
+5) **Task Breakdown (TDD-first)**
    For each task:
    - **Tests to write first** (specific file paths + test names).
    - **Code changes** (files/functions to touch with rationale).
@@ -122,12 +137,12 @@ Propose the following commands (adapt to workspace). **Execute them in accordanc
    - **Risks & rollback** (if any).
    - **Estimated complexity** (S/M/L).
 
-5) **Commands (per tool permissions)**  
+6) **Commands (per tool permissions)**
    - Grouped commands to run (install/build/typecheck/lint/test/app) using your detected stack.
    - Note any migrations/feature-flag ops.
 
-6) **Plan Review Loop Prompt**  
-   - Ask: **“What changes would you like to make to the plan? Reply with edits, or say ‘no’ / ‘no further changes’ to proceed.”**  
+7) **Plan Review Loop Prompt**
+   - Ask: **"What changes would you like to make to the plan? Reply with edits, or say 'no' / 'no further changes' to proceed."**
    - Apply requested edits, re-print the updated plan succinctly, and repeat until I confirm **no further changes**.
 
 ## Interactive execution loop (after I confirm no further changes)
@@ -160,6 +175,7 @@ For each task in order:
 - **Ticket**: [Ticket Name]
 - **Branch Mode**: [USE-CURRENT-BRANCH: <current branch name> | Standard: <ticket branch name>]
 - **Data Source**: [Jira | Manual | Jira + Manual overrides]
+- **HIGH LEVEL PLAN** (concise task list for quick review - no ticket details)
 - **Summary** (including user story if provided)
 - **Technical Documentation** (if provided)
 - **Acceptance Criteria → Tests**
