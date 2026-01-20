@@ -1,6 +1,13 @@
 #!/bin/bash
 # Script to sync files from ~/.claude/ to git repository
-# This script works with the corrected setup where ~/.claude/agents and ~/.claude/commands are real directories
+# Syncs agents, commands, skills, and settings (including hooks) to claude-config repo
+#
+# What gets synced:
+#   - ~/.claude/agents/       → ./agents/       (custom agents)
+#   - ~/.claude/commands/     → ./commands/     (slash commands - legacy)
+#   - ~/.claude/skills/       → ./skills/       (user-level skills)
+#   - ~/.claude/settings.json → ./settings.json (settings including hooks config)
+#   - ~/.claude/*.md          → ./*.md          (any markdown files in root)
 
 set -e  # Exit on any error
 
@@ -61,8 +68,9 @@ sync_file() {
 # Sync directories
 sync_directory "$CLAUDE_DIR/agents" "$REPO_DIR/agents" "agents"
 sync_directory "$CLAUDE_DIR/commands" "$REPO_DIR/commands" "commands"
+sync_directory "$CLAUDE_DIR/skills" "$REPO_DIR/skills" "skills"
 
-# Sync individual files
+# Sync settings.json (contains hooks configuration)
 sync_file "$CLAUDE_DIR/settings.json" "$REPO_DIR/settings.json" "settings.json"
 
 # Check for any other .md files in ~/.claude/ that might need syncing

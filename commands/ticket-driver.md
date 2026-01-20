@@ -110,6 +110,9 @@ Propose the following commands (adapt to workspace). **Execute them in accordanc
    - Skip ticket details - jump straight into the task list
    - Use shortened, succinct task descriptions for quick review
    - Format as a numbered list with 1-2 line descriptions per task
+   - **ALWAYS include these two final steps:**
+     1. Run code-review-specialist subagent and fix any issues found
+     2. Run production-code-validator subagent and fix any issues found
    - Example format:
      ```
      ## HIGH LEVEL PLAN
@@ -118,6 +121,8 @@ Propose the following commands (adapt to workspace). **Execute them in accordanc
      3. Add login endpoint with validation (auth.controller.ts)
      4. Update middleware to verify tokens (auth.middleware.ts)
      5. Run full test suite and verify green
+     6. Run code-review-specialist and address any issues
+     7. Run production-code-validator and address any issues
      ```
 
 2) **Summary**
@@ -136,6 +141,10 @@ Propose the following commands (adapt to workspace). **Execute them in accordanc
    - **Observability** (logs/metrics/traces) if relevant.
    - **Risks & rollback** (if any).
    - **Estimated complexity** (S/M/L).
+
+   **ALWAYS include these two final tasks:**
+   - **Code Review**: Run code-review-specialist subagent to review all changes and fix any issues found **in the current branch** (not preexisting issues)
+   - **Production Validation**: Run production-code-validator subagent to ensure code is production-ready and fix any issues found **in the current branch** (not preexisting issues)
 
 6) **Commands (per tool permissions)**
    - Grouped commands to run (install/build/typecheck/lint/test/app) using your detected stack.
@@ -162,8 +171,19 @@ For each task in order:
 3) **Proceed**
    - Move to the next task; repeat until all acceptance criteria are satisfied.
 
+4) **Code Review (after all implementation tasks complete)**
+   - Run the **code-review-specialist** subagent to review all changes made
+   - Address any issues, suggestions, or concerns raised by the review **that are in the current branch** (not preexisting issues)
+   - Iterate until the code review passes with no outstanding issues for the current branch
+
+5) **Production Validation (after code review passes)**
+   - Run the **production-code-validator** subagent to validate production readiness
+   - Fix any issues found **in the current branch** (placeholder code, TODOs, hardcoded values, debugging code, security issues, etc.)
+   - Do not fix preexisting issues that were not introduced by this branch
+   - Iterate until the production validation passes for the current branch changes
+
 ## Guardrails
-- **Edits:** Apply file edits immediately (normal Claude Code behavior). Always show a concise diff summary after each edit.  
+- **Edits:** Apply file edits immediately (normal Claude Code behavior). Always show a concise diff summary after each edit.
   - If a change will touch **>5 files**, perform **renames/deletions**, or apply a **project-wide transform**, ask for confirmation first.
 - **Shell:** **Follow tool permissions from Claude Code settings**. If shell usage is disallowed or requires confirmation per settings, comply. Otherwise, you may run the proposed commands, echoing them first and summarizing results.
 - **Commits:** **Do not commit or push** unless I explicitly instruct you to do so.

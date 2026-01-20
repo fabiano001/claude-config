@@ -39,5 +39,44 @@
     ],
     "defaultMode": "acceptEdits"
   },
-  "alwaysThinkingEnabled": false
+  "model": "opus",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '\"\\(.tool_input.command) - \\(.tool_input.description // \"No description\")\"' >> ~/.claude/bash-command-log.txt"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '\"[\" + $timestamp + \"] Subagent started - Agent: \" + .agent_type' --arg timestamp \"$(date '+%Y-%m-%d %H:%M:%S')\" >> ~/.claude/subagent-log.txt"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '\"[\" + $timestamp + \"] Subagent finished - Agent: \" + .agent_id' --arg timestamp \"$(date '+%Y-%m-%d %H:%M:%S')\" >> ~/.claude/subagent-log.txt"
+          }
+        ]
+      }
+    ]
+  },
+  "alwaysThinkingEnabled": true,
+  "enabledPlugins": {
+    "ralph-loop@claude-plugins-official": true
+  }
 }

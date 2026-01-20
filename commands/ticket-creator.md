@@ -49,11 +49,36 @@ Produce **only** the following sections, in order, with concise, concrete wordin
 - Be **succinct**, **clear**, and **actionable**. Avoid fluff.
 - Prefer concrete nouns, specific file/service names, and observable behaviors.
 - Write so an AI editor/agent can implement from it without guessing.
+- **Use bullet lists instead of tables** for better copy/paste compatibility with Jira.
 - If the description implies risks, add a short note inside **Technical Details** or **Testing Methodology** on how to detect/mitigate them (only if relevant).
 
 ### 4) After output
-- Ask: **“Would you like any changes to the ticket text? Reply with edits, or say ‘no further changes’ to finalize.”**
-- If the user requests edits, incorporate and re-print the ticket. Repeat until the user says **“no further changes.”**
+- Ask: **"Would you like any changes to the ticket text? Reply with edits, or say 'no further changes' to finalize."**
+- If the user requests edits, incorporate and re-print the ticket. Repeat until the user says **"no further changes."**
+
+### 5) Finalization (after user says "no further changes")
+- Check if `temp/ticket-output.md` already exists. If it does, increment the filename: `temp/ticket-output-2.md`, `temp/ticket-output-3.md`, etc. Use the first available filename that doesn't exist.
+- Create the markdown file with the final ticket text.
+- Use this exact format in the file:
+  ```
+  # [Brief ticket title derived from the Story]
+
+  ## Story
+  [Story content]
+
+  ## Description
+  [Description content]
+
+  ## Acceptance Criteria
+  [Acceptance Criteria content]
+
+  ## Technical Details
+  [Technical Details content or N/A]
+
+  ## Testing Methodology
+  [Testing Methodology content]
+  ```
+- After creating the file, inform the user: **"Final ticket saved to `temp/[filename].md` for easy copying into Jira."** (use the actual filename created)
 
 ## Failure & fallback
 - If $ARGUMENTS is empty, ask for the **Ticket Description**.
