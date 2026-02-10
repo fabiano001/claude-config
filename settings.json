@@ -47,7 +47,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '\"\\(.tool_input.command) - \\(.tool_input.description // \"No description\")\"' >> ~/.claude/bash-command-log.txt"
+            "command": "jq -r '\"[\" + $timestamp + \"] \" + .tool_input.command + \" - \" + (.tool_input.description // \"No description\")' --arg timestamp \"$(date '+%Y-%m-%d %H:%M:%S')\" >> ~/.claude/bash-command-log.txt"
           }
         ]
       }
@@ -75,8 +75,9 @@
       }
     ]
   },
-  "alwaysThinkingEnabled": true,
   "enabledPlugins": {
     "ralph-loop@claude-plugins-official": true
-  }
+  },
+  "alwaysThinkingEnabled": true,
+  "cleanupPeriodDays": 60
 }

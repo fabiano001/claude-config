@@ -8,6 +8,7 @@
 #   - ~/.claude/skills/       → ./skills/       (user-level skills)
 #   - ~/.claude/settings.json → ./settings.json (settings including hooks config)
 #   - ~/.claude/*.md          → ./*.md          (any markdown files in root)
+#   - ~/RalphLoops/           → ./RalphLoops/   (RalphLoops, respects .gitignore)
 
 set -e  # Exit on any error
 
@@ -21,25 +22,30 @@ sync_directory() {
     local source_dir="$1"
     local target_dir="$2"
     local dir_name="$3"
-    
+    local exclude_pattern="$4"  # optional: extra file/pattern to exclude
+
     if [ ! -d "$source_dir" ]; then
         echo "⚠️  Source directory $source_dir does not exist, skipping..."
         return
     fi
-    
+
     echo "📁 Syncing $dir_name..."
-    
+
     # Remove the symbolic link in the repo if it exists
     if [ -L "$target_dir" ]; then
         rm "$target_dir"
     fi
-    
+
     # Create target directory if it doesn't exist
     mkdir -p "$target_dir"
-    
-    # Copy files from ~/.claude/ to the repo
-    rsync -av --delete "$source_dir/" "$target_dir/" --exclude=".*"
-    
+
+    # Copy files, excluding hidden files (and optional extra pattern)
+    if [ -n "$exclude_pattern" ]; then
+        rsync -av --delete "$source_dir/" "$target_dir/" --exclude=".*" --exclude="$exclude_pattern"
+    else
+        rsync -av --delete "$source_dir/" "$target_dir/" --exclude=".*"
+    fi
+
     echo "✅ $dir_name synced successfully"
 }
 
@@ -66,21 +72,44 @@ sync_file() {
 }
 
 # Sync directories
-sync_directory "$CLAUDE_DIR/agents" "$REPO_DIR/agents" "agents"
+sync_directory "$CLAUDE_DIR/agents" "$REPO_DIR/agents" "agents" "README.md"
 sync_directory "$CLAUDE_DIR/commands" "$REPO_DIR/commands" "commands"
 sync_directory "$CLAUDE_DIR/skills" "$REPO_DIR/skills" "skills"
+
+# Sync RalphLoops directory (excluding .gitignore patterns if .gitignore exists)
+RALPH_DIR="$HOME/RalphLoops"
+RALPH_TARGET="$REPO_DIR/RalphLoops"
+
+if [ -d "$RALPH_DIR" ]; then
+    echo "📁 Syncing RalphLoops..."
+
+    if [ -L "$RALPH_TARGET" ]; then
+        rm "$RALPH_TARGET"
+    fi
+
+    mkdir -p "$RALPH_TARGET"
+
+    if [ -f "$RALPH_DIR/.gitignore" ]; then
+        rsync -av --delete "$RALPH_DIR/" "$RALPH_TARGET/" --exclude=".*" --filter=":- $RALPH_DIR/.gitignore"
+    else
+        rsync -av --delete "$RALPH_DIR/" "$RALPH_TARGET/" --exclude=".*"
+    fi
+
+    echo "✅ RalphLoops synced successfully"
+else
+    echo "⚠️  Source directory $RALPH_DIR does not exist, skipping..."
+fi
 
 # Sync settings.json (contains hooks configuration)
 sync_file "$CLAUDE_DIR/settings.json" "$REPO_DIR/settings.json" "settings.json"
 
-# Check for any other .md files in ~/.claude/ that might need syncing
-echo "🔍 Checking for other files in ~/.claude/ that might need syncing..."
+# Check for .md files in ~/.claude/ root
+echo "🔍 Checking for .md files in ~/.claude/..."
 
 find "$CLAUDE_DIR" -maxdepth 1 -name "*.md" -type f | while read -r file; do
     filename=$(basename "$file")
     if [ ! -f "$REPO_DIR/$filename" ]; then
         echo "📄 Found new file: $filename"
-        echo "   Copying to repository..."
         cp "$file" "$REPO_DIR/$filename"
         echo "   ✅ $filename synced"
     fi
@@ -90,12 +119,7 @@ echo ""
 echo "✅ Sync complete!"
 echo ""
 echo "📋 Next steps:"
-echo "1. Review changes: cd $REPO_DIR && git status"
-echo "2. Add new files: git add ."
-echo "3. Commit changes: git commit -m 'Update Claude files'"
-echo "4. Push to GitHub: git push origin main"
-echo ""
-echo "🔍 To see what was synced:"
-echo "   cd $REPO_DIR && git diff --cached"
-echo ""
-echo "⚠️  Note: If files are not showing up in git status, check .gitignore"
+echo "   cd $REPO_DIR && git status"
+echo "   git add ."
+echo "   git commit -m 'Sync Claude files'"
+echo "   git push"
