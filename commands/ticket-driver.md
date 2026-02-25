@@ -17,11 +17,16 @@ The "CRITICAL: SEMANTIC VERSIONING REQUIREMENT" section below applies equally to
 ### PLAN-MODE Workflow:
 
 1. **Collect inputs** — Same as standard mode: fetch from Jira, accept manual inputs/overrides.
-2. **Skip ALL git operations** — No branch setup, no checkout, no push.
-3. **Produce the plan using the "Planning blueprint" section below** — Follow the same rigorous planning process as standard mode (HIGH LEVEL PLAN, Summary, Acceptance Criteria → Test Mapping, Design Choice, Task Breakdown, Commands). Present the full plan to the user.
-4. **Plan review loop** — Same as standard mode: present the plan and ask for changes. Repeat until the user confirms "no further changes."
-5. **Skip ALL execution** — No code changes, no tests, no implementation.
-6. **Save `plan.md`** — Distill the finalized plan into a checklist and write to:
+2. **Check for ticket dependencies** — Read `~/RalphLoops/SprintLoop/Sprints/<SPRINT_NAME>/sprintStatus.json` and find the current ticket's entry. If the ticket's `baseBranch` field is not `main`, it depends on another ticket (the `baseBranch` value is the dependency ticket name):
+   - Read `~/RalphLoops/SprintLoop/Sprints/<SPRINT_NAME>/<DEPENDENCY_TICKET>/context.md` to understand the prerequisite work (what that ticket implements, its design decisions, key files it modifies)
+   - Read `~/RalphLoops/SprintLoop/Sprints/<SPRINT_NAME>/<DEPENDENCY_TICKET>/plan.md` to understand the planned changes (what code will exist when the dependency is complete)
+   - Use this dependency context when producing the plan — the current ticket's implementation will build on top of the dependency ticket's changes
+   - If `sprintStatus.json` does not exist or the ticket is not found in it, **STOP immediately** and warn the user: "Cannot proceed — `sprintStatus.json` not found or ticket not listed. Please run the sprint setup script first to initialize the sprint configuration." Do NOT continue with planning.
+3. **Skip ALL git operations** — No branch setup, no checkout, no push.
+4. **Produce the plan using the "Planning blueprint" section below** — Follow the same rigorous planning process as standard mode (HIGH LEVEL PLAN, Summary, Acceptance Criteria → Test Mapping, Design Choice, Task Breakdown, Commands). Present the full plan to the user. If dependency context was loaded in step 2, incorporate it into the plan — reference the dependency ticket's changes and explain how the current ticket builds on them.
+5. **Plan review loop** — Same as standard mode: present the plan and ask for changes. Repeat until the user confirms "no further changes."
+6. **Skip ALL execution** — No code changes, no tests, no implementation.
+7. **Save `plan.md`** — Distill the finalized plan into a checklist and write to:
    `~/RalphLoops/SprintLoop/Sprints/<SPRINT_NAME>/<JIRA_TICKET_NUMBER>/plan.md`
 
    The plan.md must be a **flat checklist of tasks** formatted for the SprintLoop executor to follow. Each task should be a clear, actionable instruction. Example:
@@ -38,7 +43,7 @@ The "CRITICAL: SEMANTIC VERSIONING REQUIREMENT" section below applies equally to
    - [ ] Commit all changes, push to remote, and create PR
    ```
 
-7. **Save `context.md`** — Write the full ticket context to:
+8. **Save `context.md`** — Write the full ticket context to:
    `~/RalphLoops/SprintLoop/Sprints/<SPRINT_NAME>/<JIRA_TICKET_NUMBER>/context.md`
 
    This file will be read by **another LLM session** (the SprintLoop executor) that has no knowledge of this conversation. Include everything that session needs to understand and execute the plan:
@@ -58,6 +63,9 @@ The "CRITICAL: SEMANTIC VERSIONING REQUIREMENT" section below applies equally to
    ## Technical Documentation
    <any documentation from the ticket>
 
+   ## Dependency Context
+   <If the ticket depends on another ticket (baseBranch != main), summarize the dependency ticket's work here: what it implements, which files it modifies, its design decisions, and any interfaces or patterns it introduces that the current ticket will use. If no dependency, write "None — this ticket branches from main.">
+
    ## Design Decisions
    <design choices made during planning and why>
 
@@ -71,7 +79,7 @@ The "CRITICAL: SEMANTIC VERSIONING REQUIREMENT" section below applies equally to
    <any important context from the planning conversation with the user that the executor needs to know — e.g., user preferences, clarifications, edge cases discussed, things to watch out for>
    ```
 
-8. **Done** — Confirm the files were saved and exit. Do NOT proceed to implementation.
+9. **Done** — Confirm the files were saved and exit. Do NOT proceed to implementation.
 
 **If PLAN-MODE is detected, follow ONLY the workflow above. Use the "Planning blueprint" section and the "Output format (for the planning phase)" section for producing and presenting the plan, but ignore all other sections below (git handling, execution loop, commit/push/PR, etc.). Only write plan.md and context.md AFTER the user confirms "no further changes."**
 

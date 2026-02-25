@@ -49,7 +49,7 @@ Produce **only** the following sections, in order, with concise, concrete wordin
 - Be **succinct**, **clear**, and **actionable**. Avoid fluff.
 - Prefer concrete nouns, specific file/service names, and observable behaviors.
 - Write so an AI editor/agent can implement from it without guessing.
-- **Use bullet lists instead of tables** for better copy/paste compatibility with Jira.
+- **NEVER use markdown tables.** Always use bullet lists instead — tables render poorly when pasted into Jira.
 - If the description implies risks, add a short note inside **Technical Details** or **Testing Methodology** on how to detect/mitigate them (only if relevant).
 
 ### 4) After output
