@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Shell Command Rules
+
+- **NEVER use pipes (`|`), output redirection (`>`, `>>`, `2>&1`), or command substitution (`$(...)`, `${...}`) in Bash commands.** These create compound commands that trigger permission prompts. Run commands standalone and let Claude Code capture the full output.
+
 ## User Requests
 
 - **"sync claude code files"** or **"sync claude code"** → Run `./sync-claude-files.sh`

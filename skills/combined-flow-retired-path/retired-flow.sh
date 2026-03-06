@@ -50,6 +50,8 @@ echo "--- Tab 2: Tell Us About Your Boat ---"
 playwright-cli run-code "async (page) => {
   const frame = page.locator('iframe[title=\"LendAPI Product Studio\"]').contentFrame();
   await frame.locator('#make_year').fill('2026');
+  await frame.locator('select').filter({ hasText: 'Select an option' }).selectOption('Boat');
+  await page.waitForTimeout(1000);
   await frame.getByText('Pleasure').click();
   await frame.locator('#purchase_price').fill('75000');
   await frame.locator('#estimated_down_payment').fill('25000');
@@ -88,9 +90,46 @@ playwright-cli run-code "async (page) => {
 }"
 sleep 1
 
-# Tab 5: Results - No hit softpull - just click Continue
-echo "--- Tab 5: Results ---"
+# Tab 5: Results - Mandatory Login + Continue
+# After softpull, a login modal appears in the main page (not in iframe).
+# We create an account via email, then click Continue on the Results page.
+echo "--- Tab 5: Results + Mandatory Login ---"
 playwright-cli run-code "async (page) => {
+  // Wait for the login modal to appear (it's in the main page, not the iframe)
+  const modal = page.getByRole('dialog');
+  await modal.waitFor({ state: 'visible', timeout: 15000 });
+  await page.waitForTimeout(2000);
+
+  // Click 'Sign in with email'
+  const emailBtn = modal.locator('button').filter({ hasText: 'Sign in with email' });
+  await emailBtn.click();
+  await page.waitForTimeout(2000);
+
+  // Fill email (reuse the same test email)
+  const emailInput = modal.locator('input').first();
+  await emailInput.fill('$EMAIL');
+  await page.waitForTimeout(500);
+
+  // Click Next
+  const nextBtn = modal.locator('button').filter({ hasText: 'Next' });
+  await nextBtn.click();
+  await page.waitForTimeout(3000);
+
+  // Create account: fill name and password
+  const nameInput = modal.locator('input[type=\"text\"]');
+  await nameInput.fill('John TestSmith');
+  await page.waitForTimeout(500);
+
+  const passwordInput = modal.locator('input[type=\"password\"]');
+  await passwordInput.fill('TestPass123!');
+  await page.waitForTimeout(500);
+
+  // Click Save to create the account
+  const saveBtn = modal.locator('button').filter({ hasText: 'Save' });
+  await saveBtn.click();
+  await page.waitForTimeout(5000);
+
+  // Modal closes — now click Continue on the Results page (inside iframe)
   const frame = page.locator('iframe[title=\"LendAPI Product Studio\"]').contentFrame();
   await frame.getByRole('button', { name: 'Continue' }).click();
   await page.waitForTimeout(4000);
@@ -238,8 +277,8 @@ playwright-cli run-code "async (page) => {
   await page.waitForTimeout(500);
   await frame.getByRole('checkbox').first().check();
   await frame.getByRole('button', { name: 'Submit' }).click();
-  // Wait for success page to load — 'Application Submitted!' appears after processing completes
-  await frame.getByText('Application Submitted!').waitFor({ state: 'visible', timeout: 120000 });
+  // Wait for success page — renders in main page context, not inside the iframe
+  await page.getByText('Application Submitted!').waitFor({ state: 'visible', timeout: 120000 });
   await page.waitForTimeout(3000);
 }"
 sleep 1

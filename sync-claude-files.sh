@@ -6,6 +6,7 @@
 #   - ~/.claude/agents/       → ./agents/       (custom agents)
 #   - ~/.claude/commands/     → ./commands/     (slash commands - legacy)
 #   - ~/.claude/skills/       → ./skills/       (user-level skills)
+#   - ~/.claude/plugins/      → ./plugins/      (installed plugins config + cache)
 #   - ~/.claude/settings.json → ./settings.json (settings including hooks config)
 #   - ~/.claude/*.md          → ./*.md          (any markdown files in root)
 #   - ~/RalphLoops/           → ./RalphLoops/   (RalphLoops, respects .gitignore)
@@ -75,6 +76,17 @@ sync_file() {
 sync_directory "$CLAUDE_DIR/agents" "$REPO_DIR/agents" "agents" "README.md"
 sync_directory "$CLAUDE_DIR/commands" "$REPO_DIR/commands" "commands"
 sync_directory "$CLAUDE_DIR/skills" "$REPO_DIR/skills" "skills"
+# Sync plugins (exclude cache dir and transient files)
+echo "📁 Syncing plugins..."
+if [ -L "$REPO_DIR/plugins" ]; then rm "$REPO_DIR/plugins"; fi
+mkdir -p "$REPO_DIR/plugins"
+rsync -av --delete "$CLAUDE_DIR/plugins/" "$REPO_DIR/plugins/" \
+    --exclude=".*" \
+    --exclude="cache/" \
+    --exclude="install-counts-cache.json" \
+    --exclude="blocklist.json" \
+    --exclude="config.json"
+echo "✅ plugins synced successfully"
 
 # Sync RalphLoops directory (excluding .gitignore patterns if .gitignore exists)
 RALPH_DIR="$HOME/RalphLoops"

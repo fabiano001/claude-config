@@ -19,10 +19,21 @@
       "Bash(git merge:*)",
       "Bash(git branch:*)",
       "Bash(git checkout:*)",
+      "Bash(git push:*)",
+      "Bash(git stash:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git -C:*)",
+      "Bash(gh api:*)",
+      "Bash(gh pr:*)",
+      "Bash(sleep:*)",
+      "Bash(command -v codex:*)",
+      "Bash(codex:*)",
       "Bash(npm install:*)",
       "Bash(npm run:*)",
       "Bash(npm test:*)",
       "Bash(CI=true npm test:*)",
+      "Bash(CI=true npx react-scripts test:*)",
       "Bash(env CI=true npm test:*)",
       "Bash(npm run build:*)",
       "Bash(npx firebase:*)",
@@ -35,6 +46,8 @@
       "Bash(UNIQUE_EMAIL=:*)",
       "Bash(~/.claude/skills/combined-flow-retired-path/retired-flow.sh:*)",
       "Bash(/Users/fabianodesouza/.claude/skills/combined-flow-retired-path/retired-flow.sh:*)",
+      "Bash(~/.claude/skills/combined-flow-retired-path/retired-flow-prequal-only.sh:*)",
+      "Bash(/Users/fabianodesouza/.claude/skills/combined-flow-retired-path/retired-flow-prequal-only.sh:*)",
       "WebFetch(domain:github.com)",
       "WebSearch",
       "mcp__atlassian__search",
@@ -57,6 +70,15 @@
           {
             "type": "command",
             "command": "jq -r '\"[\" + $timestamp + \"] \" + .tool_input.command + \" - \" + (.tool_input.description // \"No description\")' --arg timestamp \"$(date '+%Y-%m-%d %H:%M:%S')\" >> ~/.claude/bash-command-log.txt"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd=$(jq -r '.tool_input.command'); if echo \"$cmd\" | grep -qiE 'firebase.*deploy'; then if ! echo \"$cmd\" | grep -qE '(--project[= ]+|-P\\s*)stage-trident'; then echo 'BLOCKED: Firebase deploy must explicitly target --project stage-trident. Production deploys require manual execution outside Claude Code.' >&2; exit 2; fi; fi"
           }
         ]
       }
@@ -88,5 +110,10 @@
     "ralph-loop@claude-plugins-official": true,
     "codex-peer-review@agent-peer-review-marketplace": true
   },
-  "alwaysThinkingEnabled": true
+  "alwaysThinkingEnabled": true,
+  "statusLine": {
+    "type": "command",
+    "command": "npx -y ccstatusline@latest",
+    "padding": 0
+  }
 }
