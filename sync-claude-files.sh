@@ -83,8 +83,11 @@ mkdir -p "$REPO_DIR/plugins"
 rsync -av --delete "$CLAUDE_DIR/plugins/" "$REPO_DIR/plugins/" \
     --exclude=".*" \
     --exclude="cache/" \
-    --exclude="install-counts-cache.json" \
     --exclude="blocklist.json" \
+    --exclude="known_marketplaces.json" \
+    --exclude="installed_plugins.json" \
+    --exclude="marketplaces/" \
+    --exclude="install-counts-cache.json" \
     --exclude="config.json"
 echo "✅ plugins synced successfully"
 
