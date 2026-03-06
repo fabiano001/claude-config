@@ -14,7 +14,7 @@ trap 'echo -e "\n${RED}Sprint loop interrupted by user${NC}"; exit 130' INT
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
+WHITE='\033[1;37m'
 NC='\033[0m' # No Color
 
 # Format seconds to minutes and seconds
@@ -87,10 +87,10 @@ fi
 ITERATION=0
 START_TIME=$(date +%s)
 
-echo -e "${BLUE}============================================${NC}"
-echo -e "${BLUE}Starting Sprint Loop: ${SPRINT_NAME}${NC}"
-echo -e "${BLUE}Started at: $(date)${NC}"
-echo -e "${BLUE}============================================${NC}"
+echo -e "${WHITE}============================================${NC}"
+echo -e "${WHITE}Starting Sprint Loop: ${SPRINT_NAME}${NC}"
+echo -e "${WHITE}Started at: $(date)${NC}"
+echo -e "${WHITE}============================================${NC}"
 echo ""
 
 # Main loop - continue until finished.true exists
@@ -116,7 +116,7 @@ while [ ! -f "$FINISHED_FILE" ]; do
         break
     fi
 
-    echo -e "${BLUE}Next ticket: ${NEXT_TICKET}${NC}"
+    echo -e "${WHITE}Next ticket: ${NEXT_TICKET}${NC}"
 
     # Get projectDir for this ticket
     PROJECT_DIR=$(jq -r --arg ticket "$NEXT_TICKET" '.[$ticket].projectDir // empty' "$STATUS_FILE")
@@ -135,7 +135,7 @@ while [ ! -f "$FINISHED_FILE" ]; do
         exit 1
     fi
 
-    echo -e "${BLUE}Project directory: ${PROJECT_DIR}${NC}"
+    echo -e "${WHITE}Project directory: ${PROJECT_DIR}${NC}"
 
     # Generate a session ID and record start time in sprintStatus.json
     SESSION_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
@@ -143,8 +143,8 @@ while [ ! -f "$FINISHED_FILE" ]; do
     jq --arg ticket "$NEXT_TICKET" --arg sid "$SESSION_ID" --arg started "$STARTED_AT" \
         '.[$ticket].sessionId = $sid | .[$ticket].startedAt = $started | .[$ticket].completedAt = null' \
         "$STATUS_FILE" > "${STATUS_FILE}.tmp" && mv "${STATUS_FILE}.tmp" "$STATUS_FILE"
-    echo -e "${BLUE}Session ID: ${SESSION_ID}${NC}"
-    echo -e "${BLUE}Started at: ${STARTED_AT}${NC}"
+    echo -e "${WHITE}Session ID: ${SESSION_ID}${NC}"
+    echo -e "${WHITE}Started at: ${STARTED_AT}${NC}"
 
     # Run ralph loop with the prompt file
     # Permissions aligned with ~/.claude/settings.json and project settings
@@ -152,12 +152,13 @@ while [ ! -f "$FINISHED_FILE" ]; do
 Edit,Write,Read,Glob,Grep,MultiEdit,Task,
 Bash(git status*),Bash(git pull*),Bash(git fetch*),Bash(git merge*),Bash(git branch*),Bash(git checkout*),
 Bash(git log*),Bash(git add*),Bash(git commit*),Bash(git push*),Bash(git diff*),Bash(git show*),
-Bash(git stash*),Bash(git reset*),Bash(git rm*),Bash(git mv*),Bash(git rev-parse*),
+Bash(git stash*),Bash(git reset*),Bash(git rm*),Bash(git mv*),Bash(git rev-parse*),Bash(git -C*),
 Bash(npm test*),Bash(npm run*),Bash(npm install*),Bash(npm i *),Bash(npm ls*),Bash(npm version*),
-Bash(CI=true npm test*),Bash(env CI=true npm test*),
+Bash(CI=true npm test*),Bash(env CI=true npm test*),Bash(CI=true npx react-scripts test*),
 Bash(npx firebase*),Bash(firebase deploy*),Bash(npx tsc*),Bash(npx ts-node*),
 Bash(gh pr create*),Bash(gh pr view*),Bash(gh pr diff*),Bash(gh pr list*),Bash(gh pr checks*),Bash(gh api*),
 Bash(curl*),Bash(node*),Bash(mkdir*),Bash(touch*),Bash(ls*),Bash(cat*),
+Bash(sleep*),Bash(command -v codex*),Bash(codex*),Bash(python3*),
 mcp__atlassian__*,mcp__context7__*,mcp__sequential-thinking__*,
 WebSearch,WebFetch
 TOOLS
@@ -174,9 +175,11 @@ TOOLS
 
     # Run claude from the project directory, with sprint dir as additional allowed directory
     LOG_FILE="${SPRINT_DIR}/${NEXT_TICKET}/output.log"
+    echo "Session ID: ${SESSION_ID}" > "$LOG_FILE"
+    echo "" >> "$LOG_FILE"
     if [ "$WATCH_MODE" = true ]; then
-        echo -e "${BLUE}Watch mode: streaming Claude output to terminal${NC}"
-        echo -e "${BLUE}Output also logged to: ${LOG_FILE}${NC}"
+        echo -e "${WHITE}Watch mode: streaming Claude output to terminal${NC}"
+        echo -e "${WHITE}Output also logged to: ${LOG_FILE}${NC}"
         # Use stream-json for real-time output; tee to log file
         # jq --unbuffered extracts assistant text as it arrives
         echo "$PROCESSED_PROMPT" | \
@@ -186,21 +189,22 @@ TOOLS
                 --add-dir "$SPRINT_DIR" \
                 --print \
                 --verbose \
-                --output-format stream-json) 2>&1 | tee "$LOG_FILE"
+                --output-format stream-json) 2>&1 | tee -a "$LOG_FILE"
     else
-        echo -e "${BLUE}Output logged to: ${LOG_FILE}${NC}"
         echo "$PROCESSED_PROMPT" | \
             (cd "$PROJECT_DIR" && claude \
                 --session-id "$SESSION_ID" \
                 --allowedTools "$ALLOWED_TOOLS" \
                 --add-dir "$SPRINT_DIR" \
-                --print) > "$LOG_FILE" 2>&1
+                --print) >> "$LOG_FILE" 2>&1
     fi
 
     # Record completion time in sprintStatus.json
     COMPLETED_AT=$(date +"%Y-%m-%dT%H:%M:%S")
     jq --arg ticket "$NEXT_TICKET" --arg completed "$COMPLETED_AT" \
         '.[$ticket].completedAt = $completed' "$STATUS_FILE" > "${STATUS_FILE}.tmp" && mv "${STATUS_FILE}.tmp" "$STATUS_FILE"
+
+    echo -e "${WHITE}Completed at: ${COMPLETED_AT}${NC}"
 
     ITER_END=$(date +%s)
     ITER_DURATION=$((ITER_END - ITER_START))
@@ -209,9 +213,16 @@ TOOLS
     echo -e "${GREEN}Iteration ${ITERATION} completed in $(format_duration ${ITER_DURATION})${NC}"
     echo ""
 
+    # Print output log contents
+    echo -e "${WHITE}Output:${NC}"
+    echo -e "${WHITE}--------------------------------------------${NC}"
+    cat "$LOG_FILE"
+    echo -e "${WHITE}--------------------------------------------${NC}"
+    echo ""
+
     # Small delay between iterations to prevent hammering
     if [ ! -f "$FINISHED_FILE" ]; then
-        echo -e "${BLUE}Waiting 5 seconds before next iteration...${NC}"
+        echo -e "${WHITE}Waiting 5 seconds before next iteration...${NC}"
         sleep 5
     fi
 done

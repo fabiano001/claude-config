@@ -108,21 +108,8 @@ Execute tasks in `plan.md` **strictly in the order they appear**, one at a time.
 
 4. **Proceed** — Only then move to the next task. Repeat until all tasks are complete.
 
-### After ALL implementation tasks are complete:
-
-5. **Code Review**
-   - Run the **code-review-specialist** subagent to review all changes made
-   - Address any issues, suggestions, or concerns raised by the review that are in the current branch (not preexisting issues)
-   - Iterate until the code review passes with no outstanding issues for the current branch
-
-6. **Production Validation**
-   - Run the **production-code-validator** subagent to validate production readiness
-   - Fix any issues found in the current branch (placeholder code, TODOs, hardcoded values, debugging code, security issues, etc.)
-   - Do not fix preexisting issues that were not introduced by this branch
-   - Iterate until the production validation passes for the current branch changes
-
 **IMPORTANT:**
-- Do NOT stop until ALL tasks in the plan are complete and code review + production validation have passed
+- Do NOT stop until ALL tasks in the plan are complete
 - Do NOT quit or exit early
 - If a task or command fails for **any reason** (missing tool permissions, denied tool call, missing dependency, test failure, build error, commit failure, push failure, etc.), and it has already failed **twice**, stop immediately and go to **Step 4a: Early Exit with Errors**. This rule applies to Steps 3, 4, and all sub-steps.
 - Track the start time before beginning and end time after completing
