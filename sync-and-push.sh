@@ -6,7 +6,16 @@ REPO_DIR="$HOME/PERSONAL-GITHUB/claude-config"
 cd "$REPO_DIR"
 
 # Generate branch name with current date (e.g. latest-changes-Mar-05-26)
-BRANCH_NAME="latest-changes-$(date +'%b-%d-%y')"
+BASE_BRANCH="latest-changes-$(date +'%b-%d-%y')"
+BRANCH_NAME="$BASE_BRANCH"
+
+# If branch already exists (local or remote), append incrementing suffix
+COUNTER=2
+while git show-ref --verify --quiet "refs/heads/$BRANCH_NAME" 2>/dev/null \
+   || git show-ref --verify --quiet "refs/remotes/origin/$BRANCH_NAME" 2>/dev/null; do
+    BRANCH_NAME="${BASE_BRANCH}-${COUNTER}"
+    COUNTER=$((COUNTER + 1))
+done
 
 echo "Creating branch: $BRANCH_NAME"
 git checkout -b "$BRANCH_NAME"
