@@ -8,7 +8,7 @@ description: >-
   to a debug report. Use when the user needs to debug, troubleshoot, or
   investigate a bug in the finance funnel using browser automation.
 context: fork
-allowed-tools: Bash(playwright-cli:*), Bash(dynamic-app-stage-deploy:*)
+allowed-tools: Bash(playwright-cli:*), Bash(playwright-cli eval *), Bash(dynamic-app-stage-deploy:*)
 ---
 
 # E2E Debug Finance Funnel

@@ -7,11 +7,16 @@ description: >-
 context: fork
 allowed-tools: >-
   Bash(playwright-cli:*),
+  Bash(playwright-cli eval *),
   Bash(~/.claude/skills/combined-flow-retired-path/retired-flow.sh:*),
   Bash(/Users/fabianodesouza/.claude/skills/combined-flow-retired-path/retired-flow.sh:*),
   Bash(~/.claude/skills/combined-flow-retired-path/retired-flow-prequal-only.sh:*),
   Bash(/Users/fabianodesouza/.claude/skills/combined-flow-retired-path/retired-flow-prequal-only.sh:*),
-  Bash(python3:*)
+  Bash(python3:*),
+  Bash(pip3 install fpdf2:*),
+  Bash(pip3 install fpdf2),
+  Read,
+  Write
 ---
 
 You are an autonomous QA test runner for the "combined app flow". You drive a headed browser through the combined loan application funnel, verify results, and produce a structured report.
@@ -132,14 +137,80 @@ If VERIFY_ITEMS requests specific screenshots (e.g., console output), use `playw
 playwright-cli screenshot --filename ".playwright-cli/screenshots/some-descriptive-name.png" --full-page
 ```
 
+### Step 7: Generate PDF Report
+
+After ALL tests complete, generate a PDF report with embedded screenshots.
+
+1. **Build a JSON data structure** with all test results:
+```json
+{
+  "title": "TRIDENT-XXX",
+  "subtitle": "QA Test Report",
+  "description": "Brief description of what was tested",
+  "environment": "QA (qa.boattrader.com)",
+  "date": "YYYY-MM-DD",
+  "tests": [
+    {
+      "name": "Test 1: Test Name",
+      "status": "PASS",
+      "verify_items": [
+        {"num": 1, "item": "Description of verify item", "status": "PASS", "details": "How it was verified"},
+        {"num": 2, "item": "Another item", "status": "FAIL", "details": "What went wrong"}
+      ],
+      "screenshots": [
+        {"path": "/absolute/path/to/screenshot.png", "caption": "Description of screenshot"},
+        {"path": "/absolute/path/to/another.png", "caption": "After verify item 3", "after_item": 3}
+      ],
+      "notes": "Optional notes about the test"
+    }
+  ]
+}
+```
+
+- **`status`** for tests: `"PASS"`, `"FAIL"`, or `"PARTIAL PASS"`
+- **`status`** for verify items: `"PASS"`, `"FAIL"`, `"PARTIAL"`, `"CODE-VERIFIED"`, or `"NOT TESTED"`
+- **`after_item`** (optional): places the screenshot after that verify item number in the PDF
+- Screenshots without `after_item` appear at the end of the test section
+- Use **absolute paths** for all screenshot paths
+- Get today's date via `python3 -c "import datetime; print(datetime.date.today().isoformat())"`
+- Derive the ticket number from the test file name or the `<TEST_TO_RUN>` context
+
+2. **Write the JSON to a file:**
+```bash
+python3 -c "
+import json
+data = ... # the JSON structure above as a Python dict
+with open('.playwright-cli/screenshots/report-data.json', 'w') as f:
+    json.dump(data, f)
+"
+```
+
+**IMPORTANT:** Build the entire Python dict as a literal inside the python3 script. Do NOT use shell substitution to inject values. Pass the full data inline.
+
+3. **Install fpdf2 if needed and generate the PDF:**
+```bash
+pip3 install fpdf2
+```
+```bash
+python3 ~/.claude/skills/e2e-test-combined-flow/generate-qa-report.py ".playwright-cli/screenshots/TRIDENT-XXX-QA-Report.pdf" ".playwright-cli/screenshots/report-data.json"
+```
+
+4. **Report the PDF path** to the user in the terminal output.
+
 ## Report
 
-After all tests complete, generate a report that includes:
+After all tests complete, produce TWO outputs:
 
+### Terminal Report
 - **Status of each test** - Pass/Fail with details
 - **Status of each verify item** - Pass/Fail per item within each test
-- **Screenshot** of the final screen for each test (taken by the script automatically)
-- **Additional screenshots** - If a `<TEST_TO_RUN>` block's VERIFY_ITEMS requests specific screenshots, include those with file paths
+- **Screenshot paths** for the final screen of each test
+- **Additional screenshot paths** from VERIFY_ITEMS requests
+
+### PDF Report
+- Generated automatically via Step 7 above
+- Contains all test results, verify items, and **embedded screenshots**
+- File path reported to the user at the end
 
 ## Rules
 
