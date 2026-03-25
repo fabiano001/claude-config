@@ -135,5 +135,5 @@
     "codex-peer-review@agent-peer-review-marketplace": true
   },
   "alwaysThinkingEnabled": true,
-  "voiceEnabled": false,
+  "voiceEnabled": false
 }
