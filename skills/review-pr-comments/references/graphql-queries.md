@@ -1,6 +1,6 @@
 # GraphQL Queries for PR Review Threads
 
-**IMPORTANT:** Always inline the GraphQL query directly in the `gh api graphql` command. Do NOT write queries to temp files and use `$(cat /tmp/...)` — command substitution (`$(...)`) triggers security permission prompts that block autonomous execution.
+**IMPORTANT:** NEVER use heredocs (`cat <<'EOF' ... EOF`), pipes (`|`), or temp files in `/tmp/` to pass queries to `gh api graphql` — these trigger security permission prompts that block autonomous execution. Instead, pass the query and variables as inline `-f`/`-F` flags directly on the command line.
 
 ## Two-Phase Query Strategy
 
@@ -15,15 +15,19 @@ This prevents resolved thread bodies (often 3–4KB each from bot reviewers) fro
 
 ## Phase 1: Fetch thread metadata (no comment bodies)
 
-Use `gh api graphql --input -` with a heredoc to avoid shell `$` interpolation issues:
+Pass the query and variables as `-f`/`-F` flags (replace `{owner}`, `{repo}`, `{number}` with actual values):
 
 ```bash
-cat <<'QUERY_EOF' | gh api graphql --input -
-{"query":"query($owner:String!,$repo:String!,$number:Int!,$cursor:String){repository(owner:$owner,name:$repo){pullRequest(number:$number){title number url author{login}baseRefName headRefName reviewThreads(first:100,after:$cursor){pageInfo{hasNextPage endCursor}nodes{id isResolved isOutdated path line startLine diffSide resolvedBy{login}comments(first:1){totalCount nodes{author{login ...on Bot{id}}}}}}}}}","variables":{"owner":"{owner}","repo":"{repo}","number":{number}}}
-QUERY_EOF
+gh api graphql -f query='query($owner:String!,$repo:String!,$number:Int!,$cursor:String){repository(owner:$owner,name:$repo){pullRequest(number:$number){title number url author{login}baseRefName headRefName reviewThreads(first:100,after:$cursor){pageInfo{hasNextPage endCursor}nodes{id isResolved isOutdated path line startLine diffSide resolvedBy{login}comments(first:1){totalCount nodes{author{login ...on Bot{id}}}}}}}}}' -F owner={owner} -F repo={repo} -F number={number}
 ```
 
-Replace `{owner}`, `{repo}`, and `{number}` with actual values inline.
+This is a single command — no pipes, no heredocs, no temp files.
+
+**For pagination**, add the cursor variable:
+
+```bash
+gh api graphql -f query='query($owner:String!,$repo:String!,$number:Int!,$cursor:String){repository(owner:$owner,name:$repo){pullRequest(number:$number){title number url author{login}baseRefName headRefName reviewThreads(first:100,after:$cursor){pageInfo{hasNextPage endCursor}nodes{id isResolved isOutdated path line startLine diffSide resolvedBy{login}comments(first:1){totalCount nodes{author{login ...on Bot{id}}}}}}}}}' -F owner={owner} -F repo={repo} -F number={number} -f cursor={endCursor}
+```
 
 **This returns for each thread:**
 - `id` — needed for Phase 2 node query
@@ -33,7 +37,7 @@ Replace `{owner}`, `{repo}`, and `{number}` with actual values inline.
 - `comments.totalCount` — how many comments in the thread
 - `comments.nodes[0].author` — who started the thread (first comment only, no body)
 
-**Pagination:** If `pageInfo.hasNextPage` is `true`, re-run with `$cursor` set to `endCursor`. Repeat until `hasNextPage` is `false`.
+**Pagination:** If `pageInfo.hasNextPage` is `true`, re-run with `cursor` set to `endCursor`. Repeat until `hasNextPage` is `false`.
 
 ---
 
@@ -41,20 +45,18 @@ Replace `{owner}`, `{repo}`, and `{number}` with actual values inline.
 
 After Phase 1, collect the `id` values of all **unresolved** threads (where `isResolved` is `false`).
 
-Build a batched `node` query using aliases. Example with 2 unresolved threads:
+Build a batched `node` query using aliases. Example with 2 unresolved threads (replace thread IDs with actual values):
 
 ```bash
-cat <<'QUERY_EOF' | gh api graphql --input -
-{"query":"{thread0:node(id:\"PRRT_abc123\"){...on PullRequestReviewThread{comments(first:50){nodes{id body author{login ...on Bot{id}}createdAt updatedAt url}}}} thread1:node(id:\"PRRT_def456\"){...on PullRequestReviewThread{comments(first:50){nodes{id body author{login ...on Bot{id}}createdAt updatedAt url}}}}}"}
-QUERY_EOF
+gh api graphql -f query='{thread0:node(id:"PRRT_abc123"){...on PullRequestReviewThread{comments(first:50){nodes{id body author{login ...on Bot{id}}createdAt updatedAt url}}}} thread1:node(id:"PRRT_def456"){...on PullRequestReviewThread{comments(first:50){nodes{id body author{login ...on Bot{id}}createdAt updatedAt url}}}}}'
 ```
 
 **How to construct this query:**
 1. Read the Phase 1 output and identify unresolved thread IDs
 2. For each unresolved thread, create an alias `thread0`, `thread1`, `thread2`, etc.
 3. Each alias queries `node(id:"THREAD_ID")` with the full comments fragment
-4. Combine all aliases into a single query string
-5. Inline the query in the heredoc — do NOT use `$(...)` or `${...}`
+4. Combine all aliases into a single query string passed via `-f query='...'`
+5. Do NOT use pipes, heredocs, temp files, `$(...)` or `${...}`
 
 **If there are zero unresolved threads, skip Phase 2 entirely.**
 

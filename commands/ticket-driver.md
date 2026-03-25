@@ -196,9 +196,11 @@ Propose the following commands (adapt to workspace). **Execute them in accordanc
 
 **IMPORTANT:** Run each git command as a **separate Bash call**. Do NOT combine commands with `&&` or `;` (e.g., `cd /path && git status`, `git status && git fetch`) — compound commands trigger security permission prompts.
 
+**IMPORTANT:** NEVER use `cd` in Bash commands. Use **absolute paths** instead. For example, use `git -C /full/path/to/repo status` instead of `cd /path && git status`. The `-C` flag tells git to run in a specific directory without needing `cd`. For non-git commands, pass absolute file paths directly.
+
 **IMPORTANT:** NEVER use pipes (`|`), output redirection (`>`, `>>`, `2>&1`), or command substitution (`$(...)`, `${...}`) in Bash commands — these create compound commands that trigger permission prompts and BLOCK autonomous execution. Run commands standalone.
 
-- Ensure a clean working tree and up-to-date remotes (warn if dirty):
+- Ensure a clean working tree and up-to-date remotes (warn if dirty). Use `git -C <absolute-path>` if the workspace is not the current directory:
   - `git status -s`
   - `git remote -v`
   - `git fetch --all --prune`
@@ -294,74 +296,135 @@ Propose the following commands (adapt to workspace). **Execute them in accordanc
    - Grouped commands to run (install/build/typecheck/lint/test/app) using your detected stack.
    - Note any migrations/feature-flag ops.
 
-7) **Plan Review Loop Prompt**
-   - Ask: **"What changes would you like to make to the plan? Reply with edits, or say 'no' / 'no further changes' to proceed."**
-   - Apply requested edits, re-print the updated plan succinctly, and repeat until I confirm **no further changes**.
+7) **Plan Review Loop Prompt (MANDATORY — NEVER SKIP)**
+   - You MUST ask: **"What changes would you like to make to the plan? Reply with edits, or say 'no' / 'no further changes' to proceed."**
+   - Wait for the user's response. Do NOT proceed until the user replies.
+   - If the user requests edits, apply them, re-print the updated plan succinctly, and ask again.
+   - Repeat until the user explicitly says **"no" / "no further changes."**
+   - **NEVER skip this step.** The plan review loop is ALWAYS interactive — the user MUST review and approve the plan before any execution begins. "Autonomous" only refers to the execution phase, not the planning phase.
 
-## Interactive execution loop (after I confirm no further changes)
-For each task in order:
+## Execution phase (ONLY after the user explicitly confirms "no further changes")
 
-1) **Write tests first (edits are applied immediately)**
-   - Create/modify test files using **Edit** and **apply the changes immediately**.
-   - After each edit, show a concise **diff summary** (file path, added/removed lines).
-   - Propose running the test command and **execute per tool permissions**.
+**PREREQUISITE:** The user MUST have explicitly said "no", "no further changes", or equivalent in the plan review loop above. If the user has NOT confirmed, go back to step 7 and ask. Do NOT auto-approve the plan.
 
-2) **Implement minimal code (edits applied immediately)**
-   - Provide **surgical diffs/code snippets** and apply them with **Edit** right away.
-   - After each logical chunk, show a brief **diff summary**.
-   - For formatter/linter/typecheck/tests, **execute per tool permissions** and summarize output.
-   - Iterate until green.
+Dispatch execution to an Agent subagent using the Agent tool. Agent subagents inherit parent permissions from `settings.local.json` and cannot ask the user questions — they are inherently non-interactive.
 
-3) **Proceed**
-   - Move to the next task; repeat until all acceptance criteria are satisfied.
+### Dispatch to Agent subagent
 
-4) **Code Review (after all implementation tasks complete)**
-   - Run the **code-review-specialist** subagent to review all changes made
-   - Address any issues, suggestions, or concerns raised by the review **that are in the current branch** (not preexisting issues)
-   - Iterate until the code review passes with no outstanding issues for the current branch
+Use the **Agent tool** with:
+- `subagent_type`: `"general-purpose"`
+- `description`: `"Execute ticket plan for <TICKET_NAME>"`
 
-5) **Production Validation (after code review passes)**
-   - Run the **production-code-validator** subagent to validate production readiness
-   - Fix any issues found **in the current branch** (placeholder code, TODOs, hardcoded values, debugging code, security issues, etc.)
-   - Do not fix preexisting issues that were not introduced by this branch
-   - Iterate until the production validation passes for the current branch changes
+The **prompt** parameter must be a single string built by concatenating sections 1–4 below. Do NOT wrap any section in code fences — the agent must read every line as a direct instruction.
 
-6) **Commit, Push, and PR (after all validation passes)**
-   - Run lint and tests for all affected projects
-   - **Only proceed if lint and tests pass** — do not commit, push, or create PR if there are failures
-   - If lint and tests pass:
-     - Commit all changes (including version updates)
-     - Push to remote
-     - Create PR using `gh pr create` with a **simple inline `--body` string**:
-       ```bash
-       gh pr create --title "TICKET-123: Short title" --body "## Summary
-       - change 1
-       - change 2
+**--- START OF PROMPT TEMPLATE (substitute variables, remove this marker) ---**
 
-       ## Test plan
-       - test step 1"
-       ```
-       **PR title prefix:** Use the **current branch name** (not the Jira ticket name) as the PR title prefix. In USE-CURRENT-BRANCH mode the branch name may differ from the ticket (e.g., `TRIDENT-822-TEST`), so always use the branch name.
-       **CRITICAL:** Do NOT use `$(cat <<'EOF' ... EOF)` or any `$(...)` command substitution for the PR body — this triggers security permission prompts. Use a plain inline string with `--body`.
+**SECTION 1 — ROLE AND SAFETY RULES (paste first, before anything else)**
 
-7) **Review PR Comments (after PR is created)**
-   - **Wait 20 minutes** before running, to allow time for automated review bots (e.g., Cursor bot) to post their comments. Use the Bash tool with ONLY `sleep 1200` as the command — no `echo`, no `&&`, no `$(...)`.
-   - Then run `/review-pr-comments` with the PR URL in **autonomous mode**
-   - This will monitor the PR for reviewer comments, auto-fix any real issues with "Fix" recommendation, commit, push, and poll for new comments
-   - The autonomous loop handles tests and linting after each fix round
+You are the Ticket Driver Executor — an autonomous execution engine that implements a pre-approved plan task by task. You run in a separate context with NO user present.
 
-8) **Codex Review (after PR comments are addressed)**
-   - Run `/codex-review` with the PR URL in **autonomous mode**
-   - This will run Codex CLI peer review against the branch, auto-fix any real issues with "Fix" recommendation, commit, push, and git stash the report
-   - The autonomous mode handles tests and linting after fixes
+RULE 1 — NEVER ASK QUESTIONS:
+You MUST NOT use AskUserQuestion or any similar tool. You MUST NOT output text asking the user to confirm, approve, or choose. There is no user. If you are unsure about something, make the best decision and proceed. NEVER say "Do you want to proceed?" or "Should I continue?" or present numbered options — just do the work.
+
+RULE 2 — BASH COMMAND FORMAT:
+Every Bash command you run MUST be a simple, standalone command. Before submitting ANY Bash tool call, mentally scan the command string for these FORBIDDEN characters and remove them:
+
+FORBIDDEN — remove these if present:
+  2>&1  (NEVER append this — Claude Code captures stderr automatically)
+  &&    (split into separate Bash calls)
+  ;     (split into separate Bash calls)
+  ||    (split into separate Bash calls)
+  |     (NEVER use pipes — this includes "| grep", "| head", "| tail", "| wc" etc.)
+  >     (no output redirection)
+  >>    (no output redirection)
+  $(    (no command substitution)
+  cd    (NEVER use cd — use git -C or npm/npx --prefix)
+  ~     (expand to full absolute path)
+
+SELF-CHECK: Read your Bash command string character by character. If it contains 2>&1, delete those 4 characters. If it contains | grep (or any pipe), remove it — read the full output instead. This check is mandatory for every single Bash call.
+
+NEVER filter test output with grep. When tests fail, run the test command standalone and read the full output — Claude Code captures everything. Do NOT append "| grep ..." or "2>&1 | grep ..." to narrow the output.
+
+CORRECT command patterns (copy these exactly, substituting paths):
+  git -C /absolute/path status
+  npm --prefix /absolute/path/to/dynamic-app run lint
+  npm --prefix /absolute/path/to/dynamic-app test
+  CI=true npm --prefix /absolute/path/to/dynamic-app test -- --watchAll=false --no-coverage
+  CI=true npm --prefix /absolute/path/to/dynamic-app test -- --testPathPattern="src/foo/bar.test.tsx" --watchAll=false --no-coverage
+  npx --prefix /absolute/path/to/dynamic-app eslint src/
+  git -C /absolute/path add src/foo/bar.ts
+  git -C /absolute/path commit -m "message"
+  git -C /absolute/path push -u origin BRANCH_NAME
+  gh pr create --repo owner/repo --title "title" --body "body"
+  sleep 1200
+
+**SECTION 2 — CONTEXT (substitute actual values)**
+
+PROJECT_ROOT: <absolute path to the project root — the current IDE workspace>
+TICKET_NAME: <ticket key, e.g., TRIDENT-655>
+BRANCH_NAME: <current git branch name — use branch name, not ticket name>
+
+**SECTION 3 — PLAN (paste the finalized plan sections)**
+
+HIGH LEVEL PLAN:
+<the numbered task list from the planning phase>
+
+TASK BREAKDOWN:
+<the full task breakdown with file paths, test names, and rationale>
+
+ACCEPTANCE CRITERIA:
+<the acceptance criteria from the ticket>
+
+DESIGN DECISIONS:
+<the chosen design approach and constraints>
+
+**SECTION 4 — EXECUTION WORKFLOW**
+
+Step 1 — Write initial status.md:
+Write PROJECT_ROOT/dynamic-app/docs/status.md with all tasks from the HIGH LEVEL PLAN as unchecked items ([ ] 1. task ...).
+
+Step 2 — Execute tasks in a loop:
+Repeat the following 3-step cycle for EACH task in order. Do not skip any step.
+
+  Step 2a — Execute the task:
+  Follow TDD-first rules (write tests FIRST, implement SECOND). Exceptions: pure config changes, dependency updates with no logic, trivial one-line fixes already covered by tests. Use the Edit tool for all code changes. Keep diffs minimal. Run lint, typecheck, and tests after each implementation chunk. Iterate until green.
+
+  Step 2b — Update status.md (MANDATORY after every task):
+  Use the Edit tool to change [ ] to [x] for the task you just completed in PROJECT_ROOT/dynamic-app/docs/status.md. This is not optional. Do this immediately after each task passes, before starting the next task.
+
+  Step 2c — Move to the next task and repeat from Step 2a.
+
+Step 3 — Code Review and Production Validation:
+- Run the code-review-specialist agent (via Agent tool) to review all changes. Fix issues found in the current branch only (not preexisting issues).
+- Run the production-code-validator agent (via Agent tool) to validate production readiness. Fix issues found in the current branch only.
+
+Step 4 — Commit, Push, and PR:
+- Run lint and tests one final time. Only proceed if both pass.
+- Stage changed files with git add (one file per call — never git add -A or git add .).
+- Commit with a descriptive message.
+- Push to remote.
+- Create PR using gh pr create --title "BRANCH_NAME: Short title" --body "inline body text"
+
+Step 5 — Write learnings.md:
+After all tasks are complete, write PROJECT_ROOT/dynamic-app/docs/learnings.md with: Summary (what was implemented, key files, PR URL) and Learnings (anything unexpected, workarounds, patterns, gotchas — or "No significant learnings" if straightforward).
+
+Step 6 — Return completion message:
+Return a message confirming all tasks completed (or which failed and why), PR URL if created, and path to learnings.md.
+
+**--- END OF PROMPT TEMPLATE ---**
+
+### After executor completes
+
+1. **Read the learnings file**: Read `<PROJECT_ROOT>/dynamic-app/docs/learnings.md`
+2. **Present to the user**: Display the Summary and Learnings sections from the file
+3. **Wait for review bots**: Run `sleep 1200` as a **foreground blocking Bash call** — do NOT use `run_in_background`. The command must block execution for the full 20 minutes before proceeding. Set the Bash tool timeout to at least 1300000ms to prevent it from timing out early.
+4. **Review PR comments**: Run `/review-pr-comments` with the PR URL in autonomous mode to auto-fix reviewer feedback
+5. **Codex review**: Run `/codex-review` with the PR URL in autonomous mode to auto-fix Codex findings
+6. **Done**: The ticket is complete
 
 ## Guardrails
-- **Edits:** Apply file edits immediately (normal Claude Code behavior). Always show a concise diff summary after each edit.
-  - If a change will touch **>5 files**, perform **renames/deletions**, or apply a **project-wide transform**, ask for confirmation first.
-- **Shell:** **Follow tool permissions from Claude Code settings**. If shell usage is disallowed or requires confirmation per settings, comply. Otherwise, you may run the proposed commands, echoing them first and summarizing results.
-- **Commits:** Follow the **Commit, Push, and PR** step in the execution loop — only commit/push/create PR after all validation (lint, tests, code review, production validation) passes.
 - Keep diffs minimal; no speculative refactors.
-- If ambiguity remains, ask **one crisp clarifying question** and continue.
+- If ambiguity remains during the planning phase, ask **one crisp clarifying question** and continue.
 - **TDD is MANDATORY** (see CRITICAL: TDD-FIRST REQUIREMENT). Tests must be written before implementation. The only exceptions are listed in that section — if skipping TDD, you must cite which exception applies.
 
 ## Output format (for the planning phase)

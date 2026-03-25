@@ -40,6 +40,8 @@
       "Bash(firebase deploy:*)",
       "Bash(firebase emulators:start:*)",
       "Bash(playwright-cli:*)",
+      "Bash(playwright-cli eval *)",
+      "Bash(playwright-cli eval:*)",
       "Bash(playwright-cli run-code:*)",
       "Bash(npx playwright-cli:*)",
       "Bash(npx playwright-cli run-code:*)",
@@ -61,7 +63,6 @@
     ],
     "defaultMode": "acceptEdits"
   },
-  "model": "opus",
   "hooks": {
     "PreToolUse": [
       {
@@ -79,6 +80,24 @@
           {
             "type": "command",
             "command": "cmd=$(jq -r '.tool_input.command'); if echo \"$cmd\" | grep -qiE 'firebase.*deploy'; then if ! echo \"$cmd\" | grep -qE '(--project[= ]+|-P\\s*)stage-trident'; then echo 'BLOCKED: Firebase deploy must explicitly target --project stage-trident. Production deploys require manual execution outside Claude Code.' >&2; exit 2; fi; fi"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd=$(jq -r '.tool_input.command'); if echo \"$cmd\" | grep -qE 'rm\\s+-[a-zA-Z]*r[a-zA-Z]*f|rm\\s+-[a-zA-Z]*f[a-zA-Z]*r|rm\\s+-r\\b|rm\\s+-[a-zA-Z]*r\\b.*\\*|find\\s.*-delete|xargs\\s+rm'; then echo 'BLOCKED: Mass delete operations (rm -rf, rm -r, find -delete, xargs rm) are not allowed. Remove files individually.' >&2; exit 2; fi"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd=$(jq -r '.tool_input.command'); if echo \"$cmd\" | grep -qiE 'firebase\\s+(firestore:delete|firestore:databases:delete|database:remove|database:set|hosting:disable|hosting:channel:delete|functions:delete|functions:secrets:destroy|functions:secrets:prune|functions:config:unset|ext:uninstall|remoteconfig:rollback|remoteconfig:experiments:delete|remoteconfig:rollouts:delete|appdistribution:testers:remove|appdistribution:groups:delete|dataconnect:sql:migrate|dataconnect:sql:shell)'; then echo 'BLOCKED: Destructive Firebase CLI command detected. These operations must be run manually outside Claude Code.' >&2; exit 2; fi"
           }
         ]
       }
@@ -106,14 +125,15 @@
       }
     ]
   },
+  "statusLine": {
+    "type": "command",
+    "command": "npx -y ccstatusline@latest",
+    "padding": 0
+  },
   "enabledPlugins": {
     "ralph-loop@claude-plugins-official": true,
     "codex-peer-review@agent-peer-review-marketplace": true
   },
   "alwaysThinkingEnabled": true,
-  "statusLine": {
-    "type": "command",
-    "command": "npx -y ccstatusline@latest",
-    "padding": 0
-  }
+  "voiceEnabled": false,
 }

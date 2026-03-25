@@ -36,6 +36,8 @@ You never commit/push unless explicitly told.
 ## Git branch handling (shell per tool permissions)
 Propose the following and **execute per tool permissions** (`~/.claude/settings.json` and/or project `.claude/settings.json`). Always echo commands and summarize results.
 
+**IMPORTANT:** Run each command as a **separate Bash call**. NEVER combine commands with `&&`, `;`, `||`, pipes (`|`), output redirection (`>`, `>>`, `2>&1`), or command substitution (`$(...)`, `${...}`). NEVER use `cd` — use `git -C /absolute/path` for git commands or pass absolute paths directly.
+
 ### Determine branch mode
 - **If `CURRENT`**:
   - Detect: `git rev-parse --abbrev-ref HEAD`
@@ -53,7 +55,8 @@ Propose the following and **execute per tool permissions** (`~/.claude/settings.
     - Optional refresh from base (ask first): **rebase** `git rebase origin/$BASE` (default) or **merge** `git merge origin/$BASE`
   - If not exists:
     - Confirm **BASE** (default `main`)
-    - `git checkout $BASE && git pull --ff-only`
+    - `git checkout $BASE` (separate call)
+    - `git pull --ff-only` (separate call)
     - `git checkout -b $BRANCH`
     - Optional upstream: `git push -u origin $BRANCH`
 
