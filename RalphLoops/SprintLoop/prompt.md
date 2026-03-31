@@ -138,16 +138,19 @@ Once ALL tasks in the plan are complete with no blocking errors:
      - test step 1"
      ```
    - **CRITICAL: Do NOT use HEREDOCs or $(cat <<EOF) for the PR body. Use a simple inline string with the --body flag.**
+   - Capture the PR URL from the `gh pr create` output (it prints the URL on success).
 
-3. **Update Sprint Status:** Edit `~/RalphLoops/SprintLoop/Sprints/{{SPRINT_NAME}}/sprintStatus.json` and set `"completed": true` for `{{JIRA_TICKET}}`.
+3. **Record Pull Request URL:** Edit `~/RalphLoops/SprintLoop/Sprints/{{SPRINT_NAME}}/sprintStatus.json` and set `"pullRequest": "<PR_URL>"` for `{{JIRA_TICKET}}`, where `<PR_URL>` is the URL returned by `gh pr create`.
 
-4. **Record Learnings:** Append any new learnings, insights, or issues encountered to `~/RalphLoops/SprintLoop/Sprints/{{SPRINT_NAME}}/learnings.md`. Include:
+4. **Update Sprint Status:** Edit `~/RalphLoops/SprintLoop/Sprints/{{SPRINT_NAME}}/sprintStatus.json` and set `"completed": true` for `{{JIRA_TICKET}}`.
+
+5. **Record Learnings:** Append any new learnings, insights, or issues encountered to `~/RalphLoops/SprintLoop/Sprints/{{SPRINT_NAME}}/learnings.md`. Include:
    - What worked well
    - What didn't work
    - Any patterns or shortcuts discovered
    - Warnings for future iterations
 
-5. **Write Summary:** Append to `~/RalphLoops/SprintLoop/Sprints/{{SPRINT_NAME}}/summary.md`:
+6. **Write Summary:** Append to `~/RalphLoops/SprintLoop/Sprints/{{SPRINT_NAME}}/summary.md`:
    ```markdown
    ## {{JIRA_TICKET}}
 
@@ -165,7 +168,7 @@ Once ALL tasks in the plan are complete with no blocking errors:
    {{Any relevant notes}}
    ```
 
-6. **Exit** - The loop will automatically start the next iteration.
+7. **Exit** - The loop will automatically start the next iteration.
 
 ---
 
@@ -246,7 +249,8 @@ If a task could not be completed due to missing tool permissions, a denied tool 
     "projectDir": "~/BOATS-GROUP-PROJECTS-GITHUB/webapp-react-trident",
     "sessionId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "startedAt": "2026-02-09T20:02:57Z",
-    "completedAt": "2026-02-09T20:45:12Z"
+    "completedAt": "2026-02-09T20:45:12Z",
+    "pullRequest": "https://github.com/owner/repo/pull/123"
   },
   "TRIDENT-803": {
     "priority": 2,
@@ -255,7 +259,8 @@ If a task could not be completed due to missing tool permissions, a denied tool 
     "projectDir": "~/BOATS-GROUP-PROJECTS-GITHUB/webapp-react-trident",
     "sessionId": null,
     "startedAt": null,
-    "completedAt": null
+    "completedAt": null,
+    "pullRequest": null
   }
 }
 ```
@@ -267,6 +272,7 @@ If a task could not be completed due to missing tool permissions, a denied tool 
 - **sessionId**: UUID of the Claude session (set automatically by the loop; do not modify)
 - **startedAt**: UTC timestamp when the loop started processing this ticket (set automatically; do not modify)
 - **completedAt**: UTC timestamp when the loop finished processing this ticket (set automatically; do not modify)
+- **pullRequest**: URL of the created PR (set by the LLM after `gh pr create`; `null` if no PR was created)
 
 ---
 

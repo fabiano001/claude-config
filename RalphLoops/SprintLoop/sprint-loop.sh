@@ -1,14 +1,21 @@
 #!/bin/bash
 
 # Sprint Loop - Runs ralph loop iterations until all sprint tasks are complete
-# Usage: ./sprint-loop.sh <sprintName> [--watchMode]
+# Usage: ./sprint-loop.sh <sprintName> [--silentMode]
 # Example: ./sprint-loop.sh sprint_1
-# Example: ./sprint-loop.sh sprint_1 --watchMode
+# Example: ./sprint-loop.sh sprint_1 --silentMode
 
 set -e
 
-# Exit cleanly on Ctrl+C
-trap 'echo -e "\n${RED}Sprint loop interrupted by user${NC}"; exit 130' INT
+# Exit cleanly on Ctrl+C (also kills background watcher)
+cleanup() {
+    if [ -n "$WATCHER_PID" ] && kill -0 "$WATCHER_PID" 2>/dev/null; then
+        kill "$WATCHER_PID" 2>/dev/null
+    fi
+    echo -e "\n${RED}Sprint loop interrupted by user${NC}"
+    exit 130
+}
+trap cleanup INT
 
 # Colors for output
 RED='\033[0;31m'
@@ -29,19 +36,65 @@ format_duration() {
     fi
 }
 
+# Watch plan.md for task completions and print progress
+# Usage: watch_plan_progress <plan_file> &
+# Polls every 15 seconds, prints newly completed tasks
+watch_plan_progress() {
+    local plan_file="$1"
+    local prev_completed=0
+    local CYAN='\033[0;36m'
+    local NC_W='\033[0m'
+
+    while true; do
+        if [ -f "$plan_file" ]; then
+            # Count completed tasks (lines with [✅] or [x])
+            local completed=0
+            local total=0
+            completed=$(grep -cE '\[✅\]|\[x\]' "$plan_file" 2>/dev/null) || completed=0
+            total=$(grep -cE '\[✅\]|\[x\]|\[ \]' "$plan_file" 2>/dev/null) || total=0
+
+            # Ensure integers
+            completed=${completed:-0}
+            total=${total:-0}
+
+            if [ "$completed" -gt "$prev_completed" ] 2>/dev/null; then
+                # Print newly completed tasks
+                local new_tasks
+                new_tasks=$(grep -E '\[✅\]|\[x\]' "$plan_file" 2>/dev/null | tail -n $((completed - prev_completed)))
+                echo ""
+                echo -e "${CYAN}[Progress: ${completed}/${total} tasks]${NC_W}"
+                echo "$new_tasks" | while IFS= read -r line; do
+                    echo -e "  ${GREEN}${line}${NC_W}"
+                done
+                prev_completed=$completed
+            fi
+
+            # Check if all done
+            if [ "$total" -gt 0 ] 2>/dev/null && [ "$completed" -eq "$total" ] 2>/dev/null; then
+                echo ""
+                echo -e "${GREEN}[All ${total} tasks completed]${NC_W}"
+                return 0
+            fi
+        fi
+        sleep 15
+    done
+}
+
+WATCHER_PID=""
+
 # Validate arguments
 if [ -z "$1" ]; then
     echo -e "${RED}Error: Sprint name is required${NC}"
-    echo "Usage: ./sprint-loop.sh <sprintName> [--watchMode]"
+    echo "Usage: ./sprint-loop.sh <sprintName> [--silentMode]"
     echo "Example: ./sprint-loop.sh sprint_1"
-    echo "Example: ./sprint-loop.sh sprint_1 --watchMode"
+    echo "Example: ./sprint-loop.sh sprint_1 --silentMode"
     exit 1
 fi
 
 SPRINT_NAME="$1"
-WATCH_MODE=false
-if [ "$2" = "--watchMode" ]; then
-    WATCH_MODE=true
+SILENT_MODE=false
+if [ "$2" = "--silentMode" ]; then
+    SILENT_MODE=true
 fi
 BASE_DIR="$HOME/RalphLoops/SprintLoop"
 SPRINTS_DIR="${BASE_DIR}/Sprints"
@@ -177,26 +230,28 @@ TOOLS
     LOG_FILE="${SPRINT_DIR}/${NEXT_TICKET}/output.log"
     echo "Session ID: ${SESSION_ID}" > "$LOG_FILE"
     echo "" >> "$LOG_FILE"
-    if [ "$WATCH_MODE" = true ]; then
-        echo -e "${WHITE}Watch mode: streaming Claude output to terminal${NC}"
-        echo -e "${WHITE}Output also logged to: ${LOG_FILE}${NC}"
-        # Use stream-json for real-time output; tee to log file
-        # jq --unbuffered extracts assistant text as it arrives
-        echo "$PROCESSED_PROMPT" | \
-            (cd "$PROJECT_DIR" && claude \
-                --session-id "$SESSION_ID" \
-                --allowedTools "$ALLOWED_TOOLS" \
-                --add-dir "$SPRINT_DIR" \
-                --print \
-                --verbose \
-                --output-format stream-json) 2>&1 | tee -a "$LOG_FILE"
-    else
-        echo "$PROCESSED_PROMPT" | \
-            (cd "$PROJECT_DIR" && claude \
-                --session-id "$SESSION_ID" \
-                --allowedTools "$ALLOWED_TOOLS" \
-                --add-dir "$SPRINT_DIR" \
-                --print) >> "$LOG_FILE" 2>&1
+    # Start background plan watcher (default, unless --silentMode)
+    PLAN_FILE="${SPRINT_DIR}/${NEXT_TICKET}/plan.md"
+    if [ "$SILENT_MODE" = false ]; then
+        echo -e "${WHITE}Monitoring task progress in plan.md${NC}"
+        echo -e "${WHITE}Full output logged to: ${LOG_FILE}${NC}"
+        watch_plan_progress "$PLAN_FILE" &
+        WATCHER_PID=$!
+    fi
+
+    # Run claude (output always goes to log file)
+    echo "$PROCESSED_PROMPT" | \
+        (cd "$PROJECT_DIR" && claude \
+            --session-id "$SESSION_ID" \
+            --allowedTools "$ALLOWED_TOOLS" \
+            --add-dir "$SPRINT_DIR" \
+            --print) >> "$LOG_FILE" 2>&1
+
+    # Stop background watcher
+    if [ -n "$WATCHER_PID" ] && kill -0 "$WATCHER_PID" 2>/dev/null; then
+        kill "$WATCHER_PID" 2>/dev/null
+        wait "$WATCHER_PID" 2>/dev/null
+        WATCHER_PID=""
     fi
 
     # Record completion time in sprintStatus.json

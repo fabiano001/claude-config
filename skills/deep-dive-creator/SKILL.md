@@ -1,5 +1,5 @@
 ---
-name: Deep Dive Creator
+name: deep-dive-creator
 description: Generate comprehensive technical deep dive documentation for a software project. Takes project name and main feature flows (required), plus optional codebase references (frontend/backend components) and project context (tech stack, domain, stage). Produces a structured 9-section Markdown document covering architecture, data & integrations, security, reliability, implementation highlights, testing, operational readiness, and technical roadmap. Tailored for executive and senior engineering audience (CTO, principals, security directors).
 ---
 

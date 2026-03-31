@@ -166,7 +166,8 @@ for i in "${!TICKETS[@]}"; do
     "completed": false,
     "baseBranch": "main",
     "projectDir": "${PROJECT_DIR}",
-    "iteration": 1
+    "iteration": 1,
+    "pullRequest": null
   }${COMMA}
 EOF
 

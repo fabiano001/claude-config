@@ -1,5 +1,5 @@
 ---
-name: Generate Test Run Blocks
+name: generate-test-run-blocks
 description: Generate one or more <TEST_TO_RUN> blocks from a test description or Jira ticket, ready to feed into the e2e-test-combined-flow agent.
 ---
 

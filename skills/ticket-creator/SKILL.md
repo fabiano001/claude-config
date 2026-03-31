@@ -1,5 +1,5 @@
 ---
-name: Ticket Creator
+name: ticket-creator
 description: Turn a short "Ticket Description" into a clean Jira ticket with Story, Description, Acceptance Criteria, Technical Details (Optional), and Testing Methodology. Asks clarifying questions first when needed; otherwise proceeds immediately.
 ---
 
