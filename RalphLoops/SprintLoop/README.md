@@ -65,21 +65,21 @@ Both scripts use absolute paths internally, so they work from any location.
 ## Running the Sprint Loop
 
 ```bash
-~/RalphLoops/SprintLoop/sprint-loop.sh <sprintName> [--watchMode]
+~/RalphLoops/SprintLoop/sprint-loop.sh <sprintName> [--silentMode]
 ```
 
 **Examples:**
 ```bash
-# Silent mode (default) - output logged to each ticket's output.log
+# Default - shows task completion progress in terminal
 ~/RalphLoops/SprintLoop/sprint-loop.sh sprint_1
 
-# Watch mode - streams Claude's output to terminal in real-time
-~/RalphLoops/SprintLoop/sprint-loop.sh sprint_1 --watchMode
+# Silent mode - no progress output, everything logged to output.log only
+~/RalphLoops/SprintLoop/sprint-loop.sh sprint_1 --silentMode
 ```
 
-The loop runs until all tickets are complete. Claude's output is always saved to `<TICKET>/output.log` for review. Use `--watchMode` to also stream it to the terminal.
+The loop runs until all tickets are complete. Claude's full output is always saved to `<TICKET>/output.log`. By default, task completions from `plan.md` are printed to the terminal as they happen. Use `--silentMode` to suppress progress output.
 
-**Monitoring progress:** Claude updates `plan.md` with checkmarks after each completed task, so you can watch progress in real-time by tailing the file:
+**Monitoring progress:** Task completions are printed to the terminal by default. Claude updates `plan.md` with checkmarks after each completed task. You can also tail the file directly:
 ```bash
 tail -f ~/RalphLoops/SprintLoop/Sprints/<sprintName>/<TICKET>/plan.md
 ```
@@ -133,7 +133,8 @@ Each ticket can have its own `projectDir` in `sprintStatus.json`. The loop start
     "projectDir": "~/BOATS-GROUP-PROJECTS-GITHUB/webapp-react-trident",
     "sessionId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "startedAt": "2026-02-09T20:02:57Z",
-    "completedAt": "2026-02-09T20:45:12Z"
+    "completedAt": "2026-02-09T20:45:12Z",
+    "pullRequest": "https://github.com/owner/repo/pull/123"
   },
   "TRIDENT-803": {
     "priority": 2,
@@ -142,7 +143,8 @@ Each ticket can have its own `projectDir` in `sprintStatus.json`. The loop start
     "projectDir": "~/BOATS-GROUP-PROJECTS-GITHUB/webapp-react-trident",
     "sessionId": null,
     "startedAt": null,
-    "completedAt": null
+    "completedAt": null,
+    "pullRequest": null
   }
 }
 ```
@@ -154,3 +156,4 @@ Each ticket can have its own `projectDir` in `sprintStatus.json`. The loop start
 - **sessionId**: UUID of the Claude session (set automatically by the loop; use `claude --resume <sessionId>` to resume)
 - **startedAt**: UTC timestamp when the loop started processing this ticket (set automatically)
 - **completedAt**: UTC timestamp when the loop finished processing this ticket (set automatically)
+- **pullRequest**: URL of the created PR (set by the LLM after creating the PR; null if no PR was created)

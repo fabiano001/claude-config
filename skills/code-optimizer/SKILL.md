@@ -1,5 +1,5 @@
 ---
-name: Code Optimizer
+name: code-optimizer
 description: Review only the changes on a feature branch (PR diff) and propose 3–5 concrete optimizations—frontend, backend, and best-practices/patterns—then implement them through a plan-review loop and TDD-first execution. Shell usage follows Claude Code tool permissions.
 ---
 

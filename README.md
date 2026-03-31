@@ -1,42 +1,35 @@
 # Claude Code Commands
 
-A collection of specialized slash commands, agents, and skills for Claude Code that streamline software development workflows including ticket implementation, debugging, code optimization, E2E testing, and Jira integration.
+A collection of specialized skills, agents, and workflows for Claude Code that streamline software development workflows including ticket implementation, debugging, code optimization, E2E testing, and Jira integration.
 
-> **Install once, use everywhere:** These commands, agents, and skills are designed to be installed globally in your home directory (`~/.claude/`) so they're available across all your projects.
+> **Install once, use everywhere:** These skills and agents are designed to be installed globally in your home directory (`~/.claude/`) so they're available across all your projects.
 
-## What are Slash Commands?
+## What are Skills?
 
-Slash commands are custom prompts that extend Claude Code's capabilities. When you type a slash command (e.g., `/ticket-driver`), it expands into a detailed prompt that guides Claude through a specific workflow.
+Skills are the primary way to extend Claude Code's capabilities. When you type a slash command (e.g., `/ticket-driver`), it loads a skill that guides Claude through a specific workflow. Skills can also be triggered automatically based on context.
 
 **Key features:**
-- Defined as markdown files with YAML front matter
-- Stored in `.claude/commands/` directory in your project
+- Defined as `SKILL.md` files with YAML front matter inside a named directory
+- Stored in `~/.claude/skills/<skill-name>/SKILL.md`
 - Automatically available in Claude Code after installation
 - Can accept arguments (e.g., `/ticket-driver TRIDENT-655`)
+- Can declare specific tool permissions and context isolation
 
-## What are Agent Commands?
+> **Note:** The legacy `.claude/commands/` format has been deprecated by Claude Code. All former commands have been migrated to skills.
 
-Agent commands are specialized agents that run autonomously to handle complex, multi-step tasks. They have access to specific tools and can make decisions independently.
+## What are Agents?
+
+Agents are specialized autonomous processors that handle complex, multi-step tasks. They have access to specific tools and can make decisions independently.
 
 **Key features:**
-- More autonomous than slash commands
+- More autonomous than skills
 - Can perform complex research and exploration
 - Useful for tasks requiring multiple tool calls and decision points
 - Stored in `.claude/agents/` directory
 
-## What are Skills?
+## Available Skills
 
-Skills are reusable capabilities that Claude Code can invoke automatically based on context. They provide specialized knowledge and workflows for specific tasks.
-
-**Key features:**
-- Triggered automatically when context matches (e.g., browser automation, Jira queries)
-- Defined as `SKILL.md` files with optional reference docs
-- Stored in `.claude/skills/` directory
-- Can declare specific tool permissions
-
-## Available Commands
-
-### Slash Commands
+### Workflow Skills
 
 #### `/ticket-driver`
 **Purpose:** End-to-end ticket implementation with TDD-first approach
@@ -44,27 +37,31 @@ Skills are reusable capabilities that Claude Code can invoke automatically based
 **Usage:**
 ```
 /ticket-driver
-/ticket-driver PLAN-MODE <SPRINT_NAME> <JIRA_TICKET_NUMBER>
+/ticket-driver PLAN-MODE <SPRINT_NAME> <TICKET_NAME>
 ```
 
 **What it does:**
 - Fetches Jira ticket details OR accepts manual inputs
 - Automatically handles Git branch creation/checkout
-- Produces concrete implementation plan with review loop
-- Implements features task-by-task with tests-first approach
+- Produces concrete implementation plan with mandatory review loop
+- Dispatches execution to an autonomous Agent subagent (inherits parent permissions, no user interaction)
+- Subagent writes progress to `dynamic-app/docs/status.md` and learnings to `dynamic-app/docs/learnings.md`
+- After execution, reads learnings and runs `/review-pr-comments` and `/codex-review` autonomously
 - Supports manual input override of Jira data
 - Supports `USE-CURRENT-BRANCH` mode to skip branch creation
 - Supports `PLAN-MODE` for SprintLoop integration (plan and context only, no execution)
+
+**Ticket Name Resolution:** Strips `-TEST` or `-TEST-<N>` suffixes for Jira lookups only. `TRIDENT-802-TEST-2` fetches from `TRIDENT-802` in Jira but uses `TRIDENT-802-TEST-2` for branch name, save directory, and PR title.
 
 **Modes:**
 
 | Mode | Description |
 |------|-------------|
-| Standard | Full workflow: plan, review, implement, validate, commit/push/PR |
+| Standard | Plan interactively, then dispatch autonomous execution via Agent subagent |
 | `USE-CURRENT-BRANCH` | Same as standard but stays on current branch, skips branch setup |
 | `PLAN-MODE` | Creates `plan.md` and `context.md` for SprintLoop — no git ops, no execution |
 
-**PLAN-MODE** generates two files under `~/RalphLoops/SprintLoop/Sprints/<SPRINT_NAME>/<TICKET>/`:
+**PLAN-MODE** generates two files under `~/RalphLoops/SprintLoop/Sprints/<SPRINT_NAME>/<TICKET_NAME>/`:
 - `plan.md` — Flat checklist of actionable tasks for the SprintLoop executor
 - `context.md` — Full ticket context (summary, acceptance criteria, design decisions, key files) so a separate LLM session can execute the plan independently
 
@@ -72,11 +69,14 @@ Skills are reusable capabilities that Claude Code can invoke automatically based
 ```bash
 # Standard: implement a ticket end-to-end
 /ticket-driver
-# → provide TRIDENT-655, review plan, Claude implements with TDD
+# → provide TRIDENT-655, review plan, autonomous execution via subagent
 
 # Plan-only for SprintLoop
 /ticket-driver PLAN-MODE sprint_1 TRIDENT-802
 # → creates plan.md + context.md, no code changes
+
+# Test sprint with suffix (fetches TRIDENT-802 from Jira, saves to TRIDENT-802-TEST-2/)
+/ticket-driver PLAN-MODE test_sprint TRIDENT-802-TEST-2
 ```
 
 ---
@@ -239,7 +239,7 @@ Researches frameworks, libraries, APIs, tools, and technical concepts. Synthesiz
 
 ---
 
-### Skills
+### Utility Skills
 
 | Skill | Description |
 |-------|-------------|
@@ -254,12 +254,13 @@ Researches frameworks, libraries, APIs, tools, and technical concepts. Synthesiz
 | **skill-authoring** | Best practices for creating Claude Code skills, MCP tools, and AI agent capabilities |
 | **find-skills** | Discover and install skills from the open agent skills ecosystem |
 | **fix-claude-installation** | Fix broken Claude Code CLI installation caused by failed auto-updates |
+| **generate-test-run-blocks** | Generate `<TEST_TO_RUN>` blocks from a Jira ticket or test description for the E2E test agent |
 
 ## Installation
 
 ### Quick Start (Recommended)
 
-Install these commands globally so they're available in **all your projects**:
+Install these skills globally so they're available in **all your projects**:
 
 ```bash
 # 1. Clone this repository
@@ -267,15 +268,13 @@ git clone git@github.com:boatsgroup/claude-code-commands.git
 cd claude-code-commands
 
 # 2. Create global Claude directories if they don't exist
-mkdir -p ~/.claude/commands ~/.claude/agents ~/.claude/skills
+mkdir -p ~/.claude/agents ~/.claude/skills
 
 # 3. Copy all files to your global directories
-cp commands/*.md ~/.claude/commands/
 cp agents/*.md ~/.claude/agents/
 cp -r skills/* ~/.claude/skills/
 
 # 4. Verify installation
-ls ~/.claude/commands/
 ls ~/.claude/agents/
 ls ~/.claude/skills/
 ```
@@ -284,24 +283,24 @@ ls ~/.claude/skills/
 
 1. Open **any project** in VS Code or Cursor
 2. Start Claude Code
-3. Type `/` to see available commands
+3. Type `/` to see available skills
 4. You should see `/ticket-driver`, `/bug-killer`, `/code-optimizer`, `/ticket-creator`, `/deep-dive-creator`, and `/generate-test-run-blocks`
 
 ### Alternative: Project-Specific Installation
 
-If you prefer to install commands only for a specific project (e.g., for team-specific workflows):
+If you prefer to install skills only for a specific project (e.g., for team-specific workflows):
 
 ```bash
 # In your project directory
-mkdir -p .claude/commands
-cp /path/to/claude-code-commands/commands/*.md .claude/commands/
+mkdir -p .claude/skills
+cp -r /path/to/claude-code-commands/skills/* .claude/skills/
 
 # Optional: Commit to version control for team sharing
-git add .claude/commands/
-git commit -m "Add Claude Code custom commands"
+git add .claude/skills/
+git commit -m "Add Claude Code custom skills"
 ```
 
-**Note:** Global commands (`~/.claude/commands/`) are available in all projects, while project-specific commands (`.claude/commands/`) only work in that project. Project-specific commands override global ones if they have the same name.
+**Note:** Global skills (`~/.claude/skills/`) are available in all projects, while project-specific skills (`.claude/skills/`) only work in that project. Personal skills override project-level ones if they have the same name.
 
 ## Repository Structure
 
@@ -312,20 +311,19 @@ claude-code-commands/
 ├── sync-claude-files.sh         # Sync files FROM ~/.claude/ TO this repo
 ├── sync-and-push.sh             # Sync, commit, push, and create PR in one step
 ├── settings.json                # Claude Code settings (permissions, env vars)
-├── commands/                    # Slash command definitions
-│   ├── ticket-driver.md
-│   ├── bug-killer.md
-│   ├── code-optimizer.md
-│   ├── ticket-creator.md
-│   ├── deep-dive-creator.md
-│   └── generate-test-run-blocks.md
 ├── agents/                      # Agent definitions
 │   ├── frontend-architect.md
 │   ├── backend-api-architect.md
 │   ├── code-review-specialist.md
 │   ├── production-code-validator.md
 │   └── tech-research-specialist.md
-├── skills/                      # Skill definitions
+├── skills/                      # All skills (workflow + utility)
+│   ├── ticket-driver/           # End-to-end ticket implementation
+│   ├── bug-killer/              # Debugging workflow
+│   ├── code-optimizer/          # PR diff optimization
+│   ├── ticket-creator/          # Jira ticket generation
+│   ├── deep-dive-creator/       # Technical documentation
+│   ├── generate-test-run-blocks/ # E2E test block generation
 │   ├── playwright-cli/
 │   ├── e2e-test-combined-flow/
 │   ├── e2e-debug-finance-funnel/
@@ -403,10 +401,10 @@ All commands in this repository follow these conventions:
 
 ## Contributing
 
-To add new commands, agents, or skills:
+To add new skills or agents:
 
-1. Create files in the appropriate directory (`commands/`, `agents/`, or `skills/`)
-2. Add YAML front matter with `name` and `description`
+1. For skills: create `skills/<name>/SKILL.md` with YAML front matter (`name`, `description`)
+2. For agents: create `agents/<name>.md` with YAML front matter
 3. Write the instructions following existing patterns
 4. Test thoroughly in various project contexts
 5. Run `./sync-claude-files.sh` to sync from `~/.claude/`

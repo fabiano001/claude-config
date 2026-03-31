@@ -1,5 +1,5 @@
 ---
-name: Bug Killer
+name: bug-killer
 description: Reproduce, isolate, and fix defects end-to-end with a deterministic, TDD-first loop, correct Git branch handling (including CURRENT branch mode), and an iterative diagnostic cycle that spans frontend, backend, and the full request path across services. Shell usage follows Claude Code tool permissions.
 ---
 

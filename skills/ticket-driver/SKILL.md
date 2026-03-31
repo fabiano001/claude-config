@@ -1,5 +1,5 @@
 ---
-name: Ticket Driver
+name: ticket-driver
 description: "From a Jira ticket number OR manual inputs, fetch ticket details, produce a concrete plan and execute it end-to-end with a TDD-first loop and correct Git branch handling. Supports USE-CURRENT-BRANCH mode and PLAN-MODE (for SprintLoop: creates plan.md and context.md without executing). Manual inputs override Jira data."
 ---
 
@@ -7,11 +7,21 @@ description: "From a Jira ticket number OR manual inputs, fetch ticket details, 
 
 **If `PLAN-MODE` is specified in the arguments**, this command operates differently. It only creates the plan and context files — it does NOT execute any code changes, git operations, or implementation.
 
-**Required arguments:** `PLAN-MODE <SPRINT_NAME> <JIRA_TICKET_NUMBER>`
-**Optional arguments:** `SAVE-DIR <DIRECTORY_NAME>` — overrides the directory name used to save plan.md and context.md. If omitted, defaults to `<JIRA_TICKET_NUMBER>`.
+**Required arguments:** `PLAN-MODE <SPRINT_NAME> <TICKET_NAME>`
 **Examples:**
-- `/ticket-driver PLAN-MODE sprint_1 TRIDENT-802` — saves to `TRIDENT-802/`
-- `/ticket-driver PLAN-MODE test_sprint TRIDENT-802 SAVE-DIR TRIDENT-802-TEST` — fetches Jira data from `TRIDENT-802`, saves to `TRIDENT-802-TEST/`
+- `/ticket-driver PLAN-MODE sprint_1 TRIDENT-802` — fetches Jira data from `TRIDENT-802`, saves to `TRIDENT-802/`
+- `/ticket-driver PLAN-MODE test_sprint TRIDENT-802-TEST` — fetches Jira data from `TRIDENT-802`, saves to `TRIDENT-802-TEST/`
+- `/ticket-driver PLAN-MODE test_sprint TRIDENT-802-TEST-2` — fetches Jira data from `TRIDENT-802`, saves to `TRIDENT-802-TEST-2/`
+
+### Ticket Name Resolution
+
+The `<TICKET_NAME>` argument is used as-is for **everything** (branch name, save directory, PR title prefix, etc.) **except** Jira lookups. For Jira API calls, strip any `-TEST` or `-TEST-<N>` suffix (where N is any number) to get the base Jira ticket key:
+- `TRIDENT-802` → Jira lookup: `TRIDENT-802`
+- `TRIDENT-802-TEST` → Jira lookup: `TRIDENT-802`
+- `TRIDENT-802-TEST-2` → Jira lookup: `TRIDENT-802`
+- `TRIDENT-802-TEST-15` → Jira lookup: `TRIDENT-802`
+
+This allows rerunning test sprints against the same Jira ticket with different `-TEST-<N>` suffixes to create separate branches and save directories.
 
 ### ⚠️ SEMANTIC VERSIONING IN PLAN-MODE
 
@@ -34,8 +44,8 @@ The "CRITICAL: TDD-FIRST REQUIREMENT" section below applies equally to PLAN-MODE
 5. **Plan review loop** — Same as standard mode: present the plan and ask for changes. Repeat until the user confirms "no further changes."
 6. **Skip ALL execution** — No code changes, no tests, no implementation.
 7. **Save `plan.md`** — Distill the finalized plan into a checklist and write to:
-   `~/RalphLoops/SprintLoop/Sprints/<SPRINT_NAME>/<SAVE_DIR>/plan.md`
-   where `<SAVE_DIR>` is the `SAVE-DIR` argument if provided, otherwise `<JIRA_TICKET_NUMBER>`.
+   `~/RalphLoops/SprintLoop/Sprints/<SPRINT_NAME>/<TICKET_NAME>/plan.md`
+   where `<TICKET_NAME>` is the full ticket name as passed (including any `-TEST-<N>` suffix).
 
    The plan.md must be a **flat checklist of tasks** formatted for the SprintLoop executor to follow. Each task should be a clear, actionable instruction. Example:
    ```markdown
@@ -55,8 +65,8 @@ The "CRITICAL: TDD-FIRST REQUIREMENT" section below applies equally to PLAN-MODE
    ```
 
 8. **Save `context.md`** — Write the full ticket context to:
-   `~/RalphLoops/SprintLoop/Sprints/<SPRINT_NAME>/<SAVE_DIR>/context.md`
-   (same `<SAVE_DIR>` as step 7)
+   `~/RalphLoops/SprintLoop/Sprints/<SPRINT_NAME>/<TICKET_NAME>/context.md`
+   (same `<TICKET_NAME>` directory as step 7)
 
    This file will be read by **another LLM session** (the SprintLoop executor) that has no knowledge of this conversation. Include everything that session needs to understand and execute the plan:
 
@@ -137,20 +147,21 @@ You are **Ticket Driver**, a delivery-focused tech lead who works interactively 
 - If a monorepo is detected (e.g., `package.json` workspaces, `turbo.json`, `nx.json`, `lerna.json`), infer the **most likely package** based on touched/created files and script availability. **Do not ask for a repo/path.** If disambiguation is absolutely required, present a best-guess and proceed.
 
 ## Jira integration
-- If a **Jira ticket number** is provided (e.g., TRIDENT-655), fetch ticket data using the MCP Atlassian tools:
+- If a **Jira ticket number** is provided (e.g., TRIDENT-655 or TRIDENT-655-TEST-2), fetch ticket data using the MCP Atlassian tools.
+- **First, resolve the Jira key** by stripping any `-TEST` or `-TEST-<N>` suffix from the ticket name (see "Ticket Name Resolution" above). Use the resolved key for ALL Jira API calls. The original ticket name (with suffix) is still used for everything else (branch, save directory, PR title, etc.).
 
 ### Step 1: Fetch ticket details
 Use `mcp__atlassian__getJiraIssue` with:
 - `cloudId`: `ba2e3477-a4e5-4924-a530-47c471494d0f`
-- `issueIdOrKey`: the ticket key (e.g., `TRIDENT-655`)
+- `issueIdOrKey`: the **resolved Jira key** (e.g., if ticket name is `TRIDENT-655-TEST-2`, use `TRIDENT-655`)
 
 This returns the title, description body, status, and other standard fields.
 
 ### Step 2: Fetch Acceptance Criteria
-Run `/fetch-jira-acceptance-criteria` with the ticket key (e.g., `TRIDENT-655`). This skill handles the custom field lookup, ADF parsing, and fallback logic. If the custom field is empty, fall back to parsing the description body for an "Acceptance Criteria" section.
+Run `/fetch-jira-acceptance-criteria` with the **resolved Jira key** (e.g., `TRIDENT-655`). This skill handles the custom field lookup, ADF parsing, and fallback logic. If the custom field is empty, fall back to parsing the description body for an "Acceptance Criteria" section.
 
 ### Step 3: Extract all inputs
-- **Ticket name** from the ticket key
+- **Ticket name** from the original ticket name argument (with any -TEST suffix — NOT the resolved Jira key)
 - **Description** from the title/summary
 - **Acceptance criteria** from Step 2
 - **User Story** from the description body (look for "User Story" section)
@@ -338,8 +349,11 @@ FORBIDDEN — remove these if present:
   >     (no output redirection)
   >>    (no output redirection)
   $(    (no command substitution)
+  =(    (Zsh process substitution — triggered by =() in strings like testPathPattern)
   cd    (NEVER use cd — use git -C or npm/npx --prefix)
   ~     (expand to full absolute path)
+
+TESTPATHPATTERN RULE: When using --testPathPattern with multiple files, NEVER use parentheses for grouping. Instead of --testPathPattern="(foo|bar)", use --testPathPattern="foo|bar" (no parentheses). The parentheses contain =( which Zsh interprets as process substitution, triggering a security prompt.
 
 SELF-CHECK: Read your Bash command string character by character. If it contains 2>&1, delete those 4 characters. If it contains | grep (or any pipe), remove it — read the full output instead. This check is mandatory for every single Bash call.
 
@@ -380,6 +394,12 @@ DESIGN DECISIONS:
 
 **SECTION 4 — EXECUTION WORKFLOW**
 
+Step 0 — Load project context (MANDATORY before any other step):
+Use the Read tool to read these files. Internalize their contents as project rules and conventions that govern all your work:
+1. Read PROJECT_ROOT/CLAUDE.md — contains project structure, code standards, semantic versioning rules, git conventions, and critical patterns. Follow every rule in this file.
+2. Read PROJECT_ROOT/.claude/MEMORY.md — if it exists, contains memory index with project context and learnings from prior sessions. Read any linked memory files that are relevant to the current ticket.
+Do NOT skip this step. Do NOT proceed to Step 1 until you have read and internalized these files.
+
 Step 1 — Write initial status.md:
 Write PROJECT_ROOT/dynamic-app/docs/status.md with all tasks from the HIGH LEVEL PLAN as unchecked items ([ ] 1. task ...).
 
@@ -418,8 +438,8 @@ Return a message confirming all tasks completed (or which failed and why), PR UR
 1. **Read the learnings file**: Read `<PROJECT_ROOT>/dynamic-app/docs/learnings.md`
 2. **Present to the user**: Display the Summary and Learnings sections from the file
 3. **Wait for review bots**: Run `sleep 1200` as a **foreground blocking Bash call** — do NOT use `run_in_background`. The command must block execution for the full 20 minutes before proceeding. Set the Bash tool timeout to at least 1300000ms to prevent it from timing out early.
-4. **Review PR comments**: Run `/review-pr-comments` with the PR URL in autonomous mode to auto-fix reviewer feedback
-5. **Codex review**: Run `/codex-review` with the PR URL in autonomous mode to auto-fix Codex findings
+4. **Review PR comments**: Invoke the skill with exactly: `/review-pr-comments <PR_URL> autonomous` — The "autonomous" keyword triggers the skill's auto-fix loop (Auto Steps A→B→C→D) which fixes issues, commits, pushes, sleeps 20 minutes, re-checks for new comments, and repeats up to 5 iterations until no new fixable issues remain.
+5. **Codex review (ONLY after step 4 is fully complete)**: Wait for `/review-pr-comments` to finish its entire autonomous loop (all iterations, up to 5 max) before proceeding. Then run `/codex-review` with the PR URL in autonomous mode to auto-fix Codex findings.
 6. **Done**: The ticket is complete
 
 ## Guardrails

@@ -131,7 +131,6 @@
     "padding": 0
   },
   "enabledPlugins": {
-    "ralph-loop@claude-plugins-official": true,
     "codex-peer-review@agent-peer-review-marketplace": true
   },
   "alwaysThinkingEnabled": true,
