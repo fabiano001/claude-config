@@ -173,22 +173,53 @@ Agents are specialized autonomous processors that handle complex, multi-step tas
 
 ---
 
-#### `/generate-test-run-blocks`
-**Purpose:** Generate `<TEST_TO_RUN>` blocks for the E2E test agent
+#### `/e2e-test-jira-ticket`
+**Purpose:** Drive an end-to-end test for a Jira ticket using `playwright-cli` in a headed browser
 
 **Usage:**
 ```
-/generate-test-run-blocks <Jira ticket key or test description>
-/generate-test-run-blocks TRIDENT-813
-/generate-test-run-blocks TRIDENT-813 prequal-only
+/e2e-test-jira-ticket <TICKET_KEY>
+/e2e-test-jira-ticket <TICKET_KEY> --plan-confirmed
 ```
 
 **What it does:**
-- Accepts a Jira ticket key or free-form test description
-- Fetches ticket details (summary, description, acceptance criteria, QA notes) when given a Jira key
-- Generates one or more `<TEST_TO_RUN>` blocks formatted for the `e2e-test-combined-flow` skill
-- Supports `prequal-only` mode to stop after the Results page login
-- Supports `qa` or `prod` environment targeting
+- Deploys the change to stage, drives the funnel through `playwright-cli`, verifies the pass/fail rule, and captures evidence
+- **Mode 1 (standalone):** Proposes a 3-item plan and asks the operator to confirm before execution
+- **Mode 2 (embedded):** `--plan-confirmed` skips the confirmation dialog — used internally by `/ticket-driver`
+
+---
+
+#### `/research`
+**Purpose:** Research a topic in the current codebase and answer specific questions
+
+**Usage:**
+```
+/research <topic or question>
+/research <topic> inline output
+```
+
+**What it does:**
+- Reads code thoroughly (entry points, helpers, callers, types, tests, config) until every question is answered
+- Produces a concise technical write-up saved to `~/.claude/memory/research/<topic>.md` and indexed in `~/.claude/memory/research/index.md`
+- Checks the index for prior research on the same topic and offers it before starting fresh work
+- Use the literal phrase `inline output` (or `output inline`) to print the write-up to the terminal instead of writing a file
+
+---
+
+#### `/bq-analyst`
+**Purpose:** Answer natural-language analytics questions about Trident Funding loan applications via BigQuery
+
+**Usage:**
+```
+/bq-analyst <analytics question>
+```
+
+**What it does:**
+- Generates BigQuery SQL against the `loan_export_1` dataset
+- Dry-runs the query for cost validation, then returns a 50-row preview
+- Triggers on questions about submitted loans, marketplaces (BoatTrader/YachtWorld/Boats.com), prequal, LendAPI, etc.
+- Read-only — never writes data and never exports PII
+- Backed by the `bq-analyst` MCP server (`functions/src/mcp-server`) for schema introspection
 
 ---
 
@@ -244,9 +275,7 @@ Researches frameworks, libraries, APIs, tools, and technical concepts. Synthesiz
 | Skill | Description |
 |-------|-------------|
 | **playwright-cli** | Browser automation for web testing, form filling, screenshots, and data extraction |
-| **e2e-test-combined-flow** | End-to-end testing of the combined app flow using Playwright in headed browser mode |
 | **e2e-debug-finance-funnel** | Debug finance funnel issues with iterative browser automation (reproduce → investigate → fix → verify) |
-| **combined-flow-retired-path** | Drive through the combined loan application funnel using the "retired flow" (minimum tabs path) |
 | **codex-review** | Run OpenAI Codex CLI peer review against a branch, generating a structured report with fix/no-fix determinations |
 | **review-pr-comments** | Analyze GitHub PR review threads, research unresolved comments, and optionally auto-fix issues |
 | **fetch-jira-acceptance-criteria** | Extract Acceptance Criteria from a Jira ticket's custom field |
@@ -254,7 +283,33 @@ Researches frameworks, libraries, APIs, tools, and technical concepts. Synthesiz
 | **skill-authoring** | Best practices for creating Claude Code skills, MCP tools, and AI agent capabilities |
 | **find-skills** | Discover and install skills from the open agent skills ecosystem |
 | **fix-claude-installation** | Fix broken Claude Code CLI installation caused by failed auto-updates |
-| **generate-test-run-blocks** | Generate `<TEST_TO_RUN>` blocks from a Jira ticket or test description for the E2E test agent |
+
+## Plugins
+
+This repo also tracks installed Claude Code plugin marketplaces under `plugins/marketplaces/`.
+
+### `agent-peer-review-marketplace`
+
+A marketplace for AI-to-AI peer validation plugins. Ships the **`codex-peer-review`** plugin, which dispatches a `codex-peer-reviewer` subagent (powered by OpenAI Codex CLI) to second-opinion Claude's designs, code reviews, and recommendations before they reach the user.
+
+**How it works:**
+1. Claude forms an opinion
+2. A subagent runs the peer review agent in an isolated context (keeps the main conversation clean)
+3. Findings are classified as agreement, disagreement, or complement
+4. Persistent conflicts escalate to Perplexity MCP (or WebSearch fallback) for arbitration
+
+**Trigger:**
+```
+/codex-peer-review              # current changes
+/codex-peer-review --base <branch>
+/codex-peer-review <question>   # for broad technical validation
+```
+
+**Prerequisites:** OpenAI Codex CLI installed (`npm i -g @openai/codex` + `codex login`).
+
+### `claude-plugins-official`
+
+The official Claude Code plugin marketplace (mirrored locally). Includes plugins like `code-review`, `commit-commands`, `feature-dev`, `plugin-dev`, `hookify`, `skill-creator`, `pr-review-toolkit`, language-specific LSP plugins, and more.
 
 ## Installation
 
@@ -284,7 +339,7 @@ ls ~/.claude/skills/
 1. Open **any project** in VS Code or Cursor
 2. Start Claude Code
 3. Type `/` to see available skills
-4. You should see `/ticket-driver`, `/bug-killer`, `/code-optimizer`, `/ticket-creator`, `/deep-dive-creator`, and `/generate-test-run-blocks`
+4. You should see `/ticket-driver`, `/bug-killer`, `/code-optimizer`, `/ticket-creator`, `/deep-dive-creator`, `/e2e-test-jira-ticket`, `/research`, and `/bq-analyst`
 
 ### Alternative: Project-Specific Installation
 
@@ -318,16 +373,17 @@ claude-code-commands/
 │   ├── production-code-validator.md
 │   └── tech-research-specialist.md
 ├── skills/                      # All skills (workflow + utility)
+│   ├── SKILLS-INDEX.md          # Quick index of skills and commands
 │   ├── ticket-driver/           # End-to-end ticket implementation
 │   ├── bug-killer/              # Debugging workflow
 │   ├── code-optimizer/          # PR diff optimization
 │   ├── ticket-creator/          # Jira ticket generation
 │   ├── deep-dive-creator/       # Technical documentation
-│   ├── generate-test-run-blocks/ # E2E test block generation
+│   ├── e2e-test-jira-ticket/    # E2E test driver for a Jira ticket
+│   ├── research/                # Codebase research + memory-backed write-ups
+│   ├── bq-analyst/              # BigQuery analytics for Trident loans
 │   ├── playwright-cli/
-│   ├── e2e-test-combined-flow/
 │   ├── e2e-debug-finance-funnel/
-│   ├── combined-flow-retired-path/
 │   ├── codex-review/
 │   ├── review-pr-comments/
 │   ├── fetch-jira-acceptance-criteria/
@@ -335,7 +391,12 @@ claude-code-commands/
 │   ├── skill-authoring/
 │   ├── find-skills/
 │   └── fix-claude-installation/
-├── plugins/                     # Installed plugins config
+├── plugins/
+│   ├── marketplaces/            # Installed plugin marketplaces
+│   │   ├── agent-peer-review-marketplace/  # Codex peer-review plugin
+│   │   └── claude-plugins-official/        # Official Claude Code plugins
+│   ├── repos/
+│   └── data/
 └── RalphLoops/                  # RalphLoops SprintLoop data
 ```
 
