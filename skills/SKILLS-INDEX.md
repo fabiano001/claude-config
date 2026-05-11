@@ -3,9 +3,8 @@
 ## Skills
 
 - **codex-review** — Runs Codex CLI peer review against a PR branch, generates a report, and optionally auto-fixes
-- **combined-flow-retired-path** — Houses the shell scripts that drive the combined loan funnel via playwright-cli
 - **e2e-debug-finance-funnel** — Debugs finance funnel bugs with playwright-cli in an iterative fix/deploy/verify loop
-- **e2e-test-combined-flow** — Runs end-to-end tests on the combined flow using `<TEST_TO_RUN>` blocks
+- **e2e-test-jira-ticket** — Drives an E2E test for a Jira ticket: deploy to stage, drive funnel via playwright-cli, verify pass/fail rule, capture evidence; Mode 1 standalone (proposes 3-item plan + asks operator to confirm) and Mode 2 embedded (`--plan-confirmed` skips dialog, used by `ticket-driver`)
 - **fetch-jira-acceptance-criteria** — Fetches acceptance criteria from a Jira ticket's custom field
 - **fetch-jira-qa-notes** — Fetches QA notes from a Jira ticket's custom field
 - **fix-claude-installation** — Fixes broken Claude Code CLI after failed auto-updates
@@ -19,6 +18,5 @@
 - **bug-killer** — Iterative debug loop: observe, hypothesize, test, fix with TDD-first approach
 - **code-optimizer** — Reviews PR diff and proposes 3-5 optimizations with plan-review loop
 - **deep-dive-creator** — Generates comprehensive 9-section technical deep dive documentation
-- **generate-test-run-blocks** — Creates `<TEST_TO_RUN>` blocks from a test description or Jira ticket
 - **ticket-creator** — Turns a short description into a structured Jira ticket
 - **ticket-driver** — End-to-end ticket execution: fetch from Jira, plan, TDD implementation, PR, review

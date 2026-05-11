@@ -46,10 +46,6 @@
       "Bash(npx playwright-cli:*)",
       "Bash(npx playwright-cli run-code:*)",
       "Bash(UNIQUE_EMAIL=:*)",
-      "Bash(~/.claude/skills/combined-flow-retired-path/retired-flow.sh:*)",
-      "Bash(/Users/fabianodesouza/.claude/skills/combined-flow-retired-path/retired-flow.sh:*)",
-      "Bash(~/.claude/skills/combined-flow-retired-path/retired-flow-prequal-only.sh:*)",
-      "Bash(/Users/fabianodesouza/.claude/skills/combined-flow-retired-path/retired-flow-prequal-only.sh:*)",
       "WebFetch(domain:github.com)",
       "WebSearch",
       "mcp__atlassian__search",
@@ -61,7 +57,7 @@
       "mcp__context7__*",
       "mcp__sequential-thinking__*"
     ],
-    "defaultMode": "acceptEdits"
+    "defaultMode": "auto"
   },
   "hooks": {
     "PreToolUse": [
@@ -131,8 +127,15 @@
     "padding": 0
   },
   "enabledPlugins": {
-    "codex-peer-review@agent-peer-review-marketplace": true
+    "codex-peer-review@agent-peer-review-marketplace": true,
+    "typescript-lsp@claude-plugins-official": true
   },
   "alwaysThinkingEnabled": true,
-  "voiceEnabled": false
+  "voice": {
+    "enabled": true,
+    "mode": "hold"
+  },
+  "skipAutoPermissionPrompt": true,
+  "voiceEnabled": true,
+  "agentPushNotifEnabled": true
 }

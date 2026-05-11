@@ -151,7 +151,7 @@ If `WAIT` is NOT present, skip this step entirely.
 
 ### Steps 1–6: Fetch, categorize, research, report
 
-Run **Steps 1–6** (parse URL, fetch metadata, fetch threads, categorize, research, **generate and save the report to `dynamic-app/pr-reviews/`**). Then, instead of Steps 7–8, execute the following loop:
+Run **Steps 1–6** (parse URL, fetch metadata, fetch threads, categorize, research, **generate and save the report to `dynamic-app/pr-reviews/`**). Then, instead of Steps 7–8, execute the following loop. **CRITICAL: You MUST execute all steps A → B → C → D in sequence. Do NOT stop after committing and pushing — you MUST continue to the poll loop (Auto Step C).**
 
 ### Auto Step A: Fix all "Real issue / Fix" items
 
@@ -180,6 +180,7 @@ Run **Steps 1–6** (parse URL, fetch metadata, fetch threads, categorize, resea
    ```bash
    git push origin {headRefName}
    ```
+4. **Immediately proceed to Auto Step C** (poll loop) — do NOT stop here.
 
 ### Auto Step C: Poll loop
 

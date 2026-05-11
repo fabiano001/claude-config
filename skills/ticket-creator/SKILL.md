@@ -54,7 +54,8 @@ Produce **only** the following sections, in order, with concise, concrete wordin
    - **Deploy GCP functions**
      - Ensure that the `xxx` **GCP function** was deployed by the CICD GitHub workflow
        - If not manually deploy it from terminal
-         - Code block: `npx firebase --project stage-trident deploy --only functions:xxx`
+         - **Single function** — code block: `npx firebase --project stage-trident deploy --only functions:xxx`
+         - **Multiple functions** — combine all targets into a single comma-separated `--only` argument (no spaces around commas). Example for two functions: `npx firebase --project stage-trident deploy --only functions:lendAPIWebhook,functions:getLendAPIApprovalData`
        - Ensure that your .env file under the functions folder has the QA values in it prior to deploy
 
    **Prod**
@@ -62,10 +63,11 @@ Produce **only** the following sections, in order, with concise, concrete wordin
    - **Deploy GCP functions**
      - Ensure that the `xxx` **GCP function** was deployed by the CICD GitHub workflow
        - If not manually deploy it from terminal
-         - Code block: `npx firebase --project trident-funding deploy --only functions:xxx`
+         - **Single function** — code block: `npx firebase --project trident-funding deploy --only functions:xxx`
+         - **Multiple functions** — combine all targets into a single comma-separated `--only` argument (no spaces around commas). Example for two functions: `npx firebase --project trident-funding deploy --only functions:lendAPIWebhook,functions:getLendAPIApprovalData`
        - Ensure that your .env file under the functions folder has the Prod values in it prior to deploy
 
-   Replace `TRIDENT-XXX` with the actual ticket name. `xxx` is a placeholder for the GCP function name — it can be changed manually later. If multiple functions are affected, duplicate the deploy line for each. If no GCP functions are affected, omit the “Deploy GCP functions” sub-sections.
+   Replace `TRIDENT-XXX` with the actual ticket name. `xxx` is a placeholder for the GCP function name — it can be changed manually later. **If multiple GCP functions are affected, use a single deploy command with comma-separated `functions:<name>` targets** (do not duplicate the deploy line per function). If no GCP functions are affected, omit the “Deploy GCP functions” sub-sections.
 
 7. **Rollback Steps**
    - Create revert PR
@@ -113,6 +115,46 @@ Produce **only** the following sections, in order, with concise, concrete wordin
 - If the user requests edits, apply the changes directly to the file using the Edit tool (do NOT re-print the full ticket — just edit the file and confirm what changed).
 - Repeat until the user says **"no further changes."**
 - On finalization, confirm: **"Final ticket is at `temp/[filename].md`, ready for Jira."**
+
+### 6) Log session to `~/.claude/memory/sessions.md` (MANDATORY — runs immediately after finalization, before exiting)
+
+Append a `ticket-creation` entry to the session log. Steps:
+
+1. **Resolve the ticket key.** If a Jira key (e.g., `TRIDENT-892`) is already present in the Ticket Description or was clearly established during clarification, use it. Otherwise ask once: **"What Jira ticket key should I log this session under in `~/.claude/memory/sessions.md`? (e.g., `TRIDENT-892`, or reply `skip` to skip logging.)"** If the user replies `skip`, skip this entire step and exit.
+
+2. **Get the current Claude session ID** — Run `ls -t /Users/fabianodesouza/.claude/projects/` (standalone Bash, no pipes) to find the most-recently-modified project subdirectory; that is the active project's session dir. Then run `ls -t /Users/fabianodesouza/.claude/projects/<that-subdir>/` to list its files; the first `.jsonl` filename (minus the `.jsonl` extension) is the current session UUID.
+
+3. **Get repo/dir** — Run `git rev-parse --show-toplevel` (standalone Bash). On success, take the basename of the path (e.g., `/Users/.../webapp-react-trident-worktree-1` → `webapp-react-trident-worktree-1`). On failure (not a git repo), run `pwd` and use its basename. **Do NOT strip `-worktree-<N>` suffixes** — the operator needs to know exactly which worktree was used.
+
+4. **Get the date** — Run `date +%Y-%m-%d` (standalone Bash).
+
+5. **Read** `/Users/fabianodesouza/.claude/memory/sessions.md` with the Read tool. If the file does not exist, treat the existing content as empty.
+
+6. **Check for an existing entry for this ticket** — Look for a line that matches `# <TICKET_KEY>` exactly OR `# <TICKET_KEY> (...)` (the ticket key followed by a parenthetical description). The match is on the ticket key only, not on the parenthetical.
+
+   - **If the ticket header exists:**
+     - **Idempotency check:** If the section already contains a `## ticket-creation` subentry whose `session id:` matches the current session UUID, SKIP the insertion (this is a re-run of the same session). Print `"Session already logged for <TICKET_KEY>; skipping."` and continue.
+     - Otherwise, insert a new H2 subentry IMMEDIATELY AFTER the H1 line and its trailing blank line, BEFORE any existing H2 subentries (newest-first ordering within the section). Use the format below.
+   - **If the ticket header does NOT exist:** PREFIX a brand-new ticket entry at the very top of the file (before any other content). Use the format below.
+
+7. **Entry format** (always exactly this shape — no extra fields, no markdown tables):
+
+   ```markdown
+   # <TICKET_KEY>
+
+   ## ticket-creation
+   - session id: <uuid>
+   - repo/dir: <repo basename>
+   - date: YYYY-MM-DD
+   ```
+
+   When inserting as a subentry under an existing ticket header, omit the H1 line and the blank line above the H2 — just the `## ticket-creation` block plus its trailing blank line.
+
+8. **Write** the updated file using the Write tool. **NEVER** use shell redirection (`>`, `>>`) or `echo` to write the file.
+
+9. **Confirm** to the user with one line: **"Logged ticket-creation session to `~/.claude/memory/sessions.md` under `<TICKET_KEY>`."**
+
+If any step (session-id lookup, git detection, file read/write) errors out, print one line explaining what failed and skip the logging — do not block ticket finalization on it.
 
 ## Failure & fallback
 - If $ARGUMENTS is empty, ask for the **Ticket Description**.
