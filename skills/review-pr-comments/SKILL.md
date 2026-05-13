@@ -106,9 +106,9 @@ Create a markdown file following the template in [references/report-template.md]
 ```
 
 - Extract the ticket number from the PR title (e.g., `TRIDENT-825`)
-- Iteration starts at `1`. If `{TICKET}-PR-REVIEW-1.md` exists, use `2`, and so on
+- Iteration starts at `1`. If `{TICKET}-PR-REVIEW-1.md` exists in the save directory, use `2`, and so on
 - If no ticket number is found, use the PR number: `PR-{number}-REVIEW-{ITERATION}.md`
-- Save in `dynamic-app/pr-reviews/` (create the directory if it doesn't exist)
+- **Save directly to** `/Users/fabianodesouza/.claude/memory/ticket-reports/{TICKET-NUMBER}/pr-review/` (create the directory with `mkdir -p` if it doesn't exist). This is durable storage that survives worktree cleanup and lives outside any project tree — no stash step is needed because the file is never written into the working tree in the first place.
 
 ### Step 7: Present results and offer fixes
 
@@ -151,12 +151,12 @@ If `WAIT` is NOT present, skip this step entirely.
 
 ### Steps 1–6: Fetch, categorize, research, report
 
-Run **Steps 1–6** (parse URL, fetch metadata, fetch threads, categorize, research, **generate and save the report to `dynamic-app/pr-reviews/`**). Then, instead of Steps 7–8, execute the following loop. **CRITICAL: You MUST execute all steps A → B → C → D in sequence. Do NOT stop after committing and pushing — you MUST continue to the poll loop (Auto Step C).**
+Run **Steps 1–6** (parse URL, fetch metadata, fetch threads, categorize, research, **generate and save the report directly to `/Users/fabianodesouza/.claude/memory/ticket-reports/{TICKET-NUMBER}/pr-review/`**). Then, instead of Steps 7–8, execute the following loop. **CRITICAL: You MUST execute all steps A → B → C → D in sequence. Do NOT stop after committing and pushing — you MUST continue to the poll loop (Auto Step C).**
 
 ### Auto Step A: Fix all "Real issue / Fix" items
 
 1. From the saved report, collect all unresolved threads with determination "Real issue" and recommendation "Fix"
-2. If there are none, go to Auto Step D (stash reports and print final summary) — do NOT skip the report
+2. If there are none, go to Auto Step D (print final summary) — do NOT skip the report
 3. Implement each fix one at a time
 4. After all fixes are applied, run tests and linter (same as Step 8)
 5. If tests or linter fail, fix the failures and re-run until both pass cleanly
@@ -192,29 +192,26 @@ Run **Steps 1–6** (parse URL, fetch metadata, fetch threads, categorize, resea
 3. Re-run Steps 3–6 (fetch threads, categorize, research, generate a new report with incremented iteration number)
 4. Check: are there any NEW unresolved threads with determination "Real issue" and recommendation "Fix"?
    - **Yes** → Go to Auto Step A (fix, test, commit, push, poll again)
-   - **No** → Go to Auto Step D (git stash reports and print final summary)
+   - **No** → Go to Auto Step D (print final summary)
 
 ### Auto Mode Safeguards
 
-- Maximum **5 iterations** of the poll loop to prevent infinite runs. After 5 iterations, go to Auto Step D (git stash reports), then notify the user.
+- Maximum **5 iterations** of the poll loop to prevent infinite runs. After 5 iterations, go to Auto Step D, then notify the user.
 - If a fix attempt fails tests/linter **3 times**, skip that fix, note it in the report, and continue with the remaining fixes.
 - On each iteration, only process threads that were NOT present in the previous iteration's report (avoid re-fixing already-addressed threads).
 - Print a status line before each sleep using plain text output (NOT a Bash command): `[Iteration {N}/5] Waiting 20 minutes...` — do NOT use `$(date ...)` or any shell substitution to compute the time
 
-### Auto Step D: Git stash reports on completion
+### Auto Step D: Print final summary
 
-When the autonomous loop ends (no more fixable issues or max iterations reached), **git stash** all report files so they don't pollute the working tree or get accidentally committed:
+When the autonomous loop ends (no more fixable issues or max iterations reached), all report files are already saved durably at `/Users/fabianodesouza/.claude/memory/ticket-reports/{TICKET-NUMBER}/pr-review/` — there is no working tree to clean up because reports were never written inside the project tree.
 
-1. Stage only the report files:
-   ```bash
-   git add dynamic-app/pr-reviews/{TICKET-NUMBER}-PR-REVIEW-*.md
+1. Print a summary listing each saved report path (one per iteration), e.g.:
    ```
-2. Git stash them with a descriptive message:
-   ```bash
-   git stash push -m "PR review reports: {TICKET-NUMBER}" -- dynamic-app/pr-reviews/
+   Saved {N} report(s):
+   - /Users/fabianodesouza/.claude/memory/ticket-reports/{TICKET-NUMBER}/pr-review/{TICKET-NUMBER}-PR-REVIEW-1.md
+   - /Users/fabianodesouza/.claude/memory/ticket-reports/{TICKET-NUMBER}/pr-review/{TICKET-NUMBER}-PR-REVIEW-2.md
    ```
-3. Print a summary: `"Git stashed {N} report(s). Retrieve with: git stash pop"`
-4. Do NOT commit the report files — they are for local reference only. The git stash preserves them without cluttering the branch.
+2. Do NOT git stash, git add, or git commit the report files — they live outside the project tree by design.
 
 ## Output Format Summary
 

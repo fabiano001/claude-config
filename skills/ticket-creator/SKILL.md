@@ -74,6 +74,15 @@ Produce **only** the following sections, in order, with concise, concrete wordin
    - Merge it
    - Deploy GCP functions if not picked up by CICD
 
+8. **Implementation Ready Marker (Add as a comment)**
+   Always append this section verbatim, as the FINAL section of the ticket — no editing, no rephrasing, no extra content. The parenthetical `(Add as a comment)` is part of the section heading itself and tells the operator how to land this marker in Jira: the marker text must be posted as a Jira **comment** on the ticket (not in the description body), because the `jira-sprint-manager` skill's Rule D scans comments — not the description — for the implementation-ready signal.
+
+   ```
+   Ticket research is complete. Ticket is ready for implementation
+   ```
+
+   This is the marker the `jira-sprint-manager` skill's Rule D scans for when deciding whether an In Progress ticket has moved from research into the implementation phase. Keep it verbatim so the case-insensitive substring match (`ticket research completed` / `research completed` / `implementation ready` / `ready for implementation`) detects it reliably.
+
 ### 3) Style & quality bar
 - Be **succinct**, **clear**, and **actionable**. Avoid fluff.
 - Prefer concrete nouns, specific file/service names, and observable behaviors.
@@ -107,20 +116,18 @@ Produce **only** the following sections, in order, with concise, concrete wordin
 
   ## Rollback Steps
   [Rollback Steps content]
+
+  ## Implementation Ready Marker (Add as a comment)
+  Ticket research is complete. Ticket is ready for implementation
   ```
-- Inform the user: **"Ticket saved to `temp/[filename].md`."** (use the actual filename created)
+- Inform the user: **"Ticket saved to `temp/[filename].md`, ready for Jira."** (use the actual filename created)
+- Do NOT ask the user if they want changes. If they want edits, they will tell you — proceed directly to the session-logging step.
 
-### 5) Review loop
-- Ask: **"Would you like any changes to the ticket text? Reply with edits, or say 'no further changes' to finalize."**
-- If the user requests edits, apply the changes directly to the file using the Edit tool (do NOT re-print the full ticket — just edit the file and confirm what changed).
-- Repeat until the user says **"no further changes."**
-- On finalization, confirm: **"Final ticket is at `temp/[filename].md`, ready for Jira."**
-
-### 6) Log session to `~/.claude/memory/sessions.md` (MANDATORY — runs immediately after finalization, before exiting)
+### 5) Log session to `~/.claude/memory/sessions.md` (MANDATORY — runs immediately after writing the file, before exiting)
 
 Append a `ticket-creation` entry to the session log. Steps:
 
-1. **Resolve the ticket key.** If a Jira key (e.g., `TRIDENT-892`) is already present in the Ticket Description or was clearly established during clarification, use it. Otherwise ask once: **"What Jira ticket key should I log this session under in `~/.claude/memory/sessions.md`? (e.g., `TRIDENT-892`, or reply `skip` to skip logging.)"** If the user replies `skip`, skip this entire step and exit.
+1. **Ask the user for the Jira ticket key.** ALWAYS prompt — at this point the user has typically just created the Jira ticket from the drafted text and now has a real key to paste. Ask exactly once: **"What Jira ticket key should I log this session under in `~/.claude/memory/sessions.md`? (e.g., `TRIDENT-892`, or reply `skip` to skip logging.)"** Wait for the response. If the user replies `skip` (or anything that clearly means skip — "no", "none", empty input), skip this entire step and exit. Otherwise, use the provided key verbatim (uppercase, including the project prefix and number, e.g., `TRIDENT-892`).
 
 2. **Get the current Claude session ID** — Run `ls -t /Users/fabianodesouza/.claude/projects/` (standalone Bash, no pipes) to find the most-recently-modified project subdirectory; that is the active project's session dir. Then run `ls -t /Users/fabianodesouza/.claude/projects/<that-subdir>/` to list its files; the first `.jsonl` filename (minus the `.jsonl` extension) is the current session UUID.
 
@@ -154,7 +161,7 @@ Append a `ticket-creation` entry to the session log. Steps:
 
 9. **Confirm** to the user with one line: **"Logged ticket-creation session to `~/.claude/memory/sessions.md` under `<TICKET_KEY>`."**
 
-If any step (session-id lookup, git detection, file read/write) errors out, print one line explaining what failed and skip the logging — do not block ticket finalization on it.
+If any step (session-id lookup, git detection, file read/write) errors out, print one line explaining what failed and skip the logging — do not block on it.
 
 ## Failure & fallback
 - If $ARGUMENTS is empty, ask for the **Ticket Description**.
@@ -168,3 +175,4 @@ If any step (session-id lookup, git detection, file read/write) errors out, prin
 - **Acceptance Criteria**
 - **Deployment Notes**
 - **Rollback Steps**
+- **Implementation Ready Marker (Add as a comment)**

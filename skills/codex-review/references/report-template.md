@@ -29,6 +29,8 @@ Use this template for the generated markdown report file.
 **Reviewed:** {current date YYYY-MM-DD}
 **Iteration:** {iteration number}
 **Mode:** {Interactive | Autonomous}
+**Codex model:** {CODEX_MODEL — resolved by Step 2 of SKILL.md, normally read from `[profiles.peer-review].model` in `~/.codex/config.toml` (e.g. `gpt-5.5`). If unknown, write `unknown (CLI default)`.}
+**Plugin:** codex-peer-review v2.0.0 (blind-debate mode)
 
 ---
 
@@ -38,7 +40,7 @@ Use this template for the generated markdown report file.
 |----------|-------|
 | Not a real issue | {N} |
 | Real issue — Fix | {N} |
-| Real issue — Leave as is | {N} |
+| Real issue — Leave as is (Contested) | {N} |
 | **Total findings** | **{N}** |
 
 ---
@@ -47,16 +49,20 @@ Use this template for the generated markdown report file.
 
 ### {index}. {file_path}:{line}
 
+- **Plugin section:** {Critical | Important | Contested | Dismissed | Style notes}
 - **Category:** {bug | security | performance | style | design | other}
 - **File:** `{path}:{line}`
+- **Source:** {both | claude | codex}  ← from the plugin's `Source:` sub-bullet (only present for Critical / Important / Contested)
 - **Codex finding:**
-  > {Codex's original concern, blockquoted}
+  > {Codex's claim verbatim, blockquoted}
 
-- **Determination:** {Not a real issue | Real issue}
+- **Evidence:** {the plugin's `Evidence:` sub-bullet — concrete exploit path, failing test, or specific failure mode}
+
+- **Determination:** {Not a real issue | Real issue}  ← derived via the verdict mapping in SKILL.md Step 4
 
 {If Not a real issue:}
 
-- **Analysis:** {explanation of why this is not an issue, referencing specific code}
+- **Analysis:** {explanation of why this is not an issue, referencing specific code. If the plugin section was `Dismissed`, summarize WHY it was withdrawn during debate.}
 
 {If Real issue:}
 
@@ -65,6 +71,13 @@ Use this template for the generated markdown report file.
 - **Risk:** {S | M | L}
 - **Recommendation:** {Fix | Leave as is}
 - **Fix description:** {how to fix, or why leaving as is}
+
+{If Contested (both AIs held position — surface both views):}
+
+- **Claude's view:** {from the plugin's `Claude's view:` sub-bullet}
+- **Codex's view:** {from the plugin's `Codex's view:` sub-bullet}
+- **Plugin recommendation:** {from the plugin's `Recommendation:` sub-bullet}
+- **This skill's recommendation:** Default to **Leave as is** and present both views; do NOT auto-fix in autonomous mode.
 
 ---
 

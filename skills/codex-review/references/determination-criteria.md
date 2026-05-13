@@ -2,6 +2,8 @@
 
 Use these criteria when evaluating each Codex finding against the actual codebase.
 
+**Relationship to plugin v2.0.0 verdict mapping:** SKILL.md Step 4 first maps each plugin section to a default determination (`Critical`/`Important` → Real issue, `Contested` → Real issue / Leave as is, `Dismissed` / `Style notes` → Not a real issue). The criteria below are used to **override** that default when your codebase research contradicts it — e.g. a `Critical` finding that an existing test already validates is downgraded to "Not a real issue" with a justification, or an `Important` finding in pre-existing untouched code is kept as "Real issue" but recommended as "Leave as is" rather than "Fix".
+
 ## Not a Real Issue
 
 Classify a finding as **"Not a real issue"** when ANY of these apply:
