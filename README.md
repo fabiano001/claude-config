@@ -223,6 +223,27 @@ Agents are specialized autonomous processors that handle complex, multi-step tas
 
 ---
 
+#### `/jira-sprint-manager`
+**Purpose:** Daily Jira sprint status report and auto-actions for the Trident BG board (391)
+
+**Usage:**
+```
+/jira-sprint-manager
+```
+
+**What it does:**
+- Fetches every ticket in the active sprint assigned to the operator (Fabiano Desouza), sorted right-to-left by board column
+- Runs four auto-action rules per invocation:
+  - **Rule A** — Transitions the top-of-New ticket to `In Progress` when nothing is currently in progress
+  - **Rule B** — Live-ticket follow-up: Live QA pre-check, reminders, and close prompts
+  - **Rule C** — `PROD READY` tickets: merge-to-main driven prod deploys with templated Jira comment
+  - **Rule D** — In Progress tickets: spawns a worktree + fresh Claude session via `open-claude-session.sh` for implementation or research kickoff
+- Writes a dated markdown report to `~/.claude/memory/jira-sprint-manager/<MM-DD-YY>.md` (never overwrites — appends `-v2`, `-v3`, … suffixes)
+- Designed for daily scheduled execution but also runs on demand
+- Does NOT execute `/ticket-driver` or `/ticket-creator` directly — it spawns those in fresh Claude sessions
+
+---
+
 ### Agents
 
 #### `frontend-architect`
@@ -276,7 +297,7 @@ Researches frameworks, libraries, APIs, tools, and technical concepts. Synthesiz
 |-------|-------------|
 | **playwright-cli** | Browser automation for web testing, form filling, screenshots, and data extraction |
 | **e2e-debug-finance-funnel** | Debug finance funnel issues with iterative browser automation (reproduce → investigate → fix → verify) |
-| **codex-review** | Run OpenAI Codex CLI peer review against a branch, generating a structured report with fix/no-fix determinations |
+| **codex-review** | Run OpenAI Codex CLI peer review against a GitHub PR URL, generating a structured report with fix/no-fix determinations (defaults to blind-debate mode) |
 | **review-pr-comments** | Analyze GitHub PR review threads, research unresolved comments, and optionally auto-fix issues |
 | **fetch-jira-acceptance-criteria** | Extract Acceptance Criteria from a Jira ticket's custom field |
 | **fetch-jira-qa-notes** | Extract QA Notes from a Jira ticket's custom field |
@@ -339,7 +360,7 @@ ls ~/.claude/skills/
 1. Open **any project** in VS Code or Cursor
 2. Start Claude Code
 3. Type `/` to see available skills
-4. You should see `/ticket-driver`, `/bug-killer`, `/code-optimizer`, `/ticket-creator`, `/deep-dive-creator`, `/e2e-test-jira-ticket`, `/research`, and `/bq-analyst`
+4. You should see `/ticket-driver`, `/bug-killer`, `/code-optimizer`, `/ticket-creator`, `/deep-dive-creator`, `/e2e-test-jira-ticket`, `/research`, `/bq-analyst`, and `/jira-sprint-manager`
 
 ### Alternative: Project-Specific Installation
 
@@ -382,6 +403,7 @@ claude-code-commands/
 │   ├── e2e-test-jira-ticket/    # E2E test driver for a Jira ticket
 │   ├── research/                # Codebase research + memory-backed write-ups
 │   ├── bq-analyst/              # BigQuery analytics for Trident loans
+│   ├── jira-sprint-manager/     # Daily sprint status report + auto-actions
 │   ├── playwright-cli/
 │   ├── e2e-debug-finance-funnel/
 │   ├── codex-review/

@@ -836,7 +836,15 @@ If you find yourself uncertain about whether to continue, the answer is always: 
 2. **Present to the user**: Display the Summary and Learnings sections from the file
 3. **Wait for review bots**: Run `sleep 1200` as a **foreground blocking Bash call** — do NOT use `run_in_background`. The command must block execution for the full 20 minutes before proceeding. Set the Bash tool timeout to at least 1300000ms to prevent it from timing out early.
 4. **Review PR comments**: Invoke the skill with exactly: `/review-pr-comments <PR_URL> autonomous` — The "autonomous" keyword triggers the skill's auto-fix loop (Auto Steps A→B→C→D) which fixes issues, commits, pushes, sleeps 20 minutes, re-checks for new comments, and repeats up to 5 iterations until no new fixable issues remain.
+
+   **4a. Capture PR review report paths (runs IMMEDIATELY after step 4 returns).** The `/review-pr-comments` skill writes its reports directly to `/Users/fabianodesouza/.claude/memory/ticket-reports/<TICKET>/pr-review/`. No stash dance, no copy — the files are already at the durable location. This step just records the paths for the final summary.
+   1. List the directory: `ls /Users/fabianodesouza/.claude/memory/ticket-reports/<TICKET>/pr-review/` (standalone Bash).
+   2. Collect every `<TICKET>-PR-REVIEW-*.md` (or `PR-<number>-REVIEW-*.md`) filename into `PR_REVIEW_REPORT_PATHS`, prefixing each with the absolute directory path.
+   3. If the directory does not exist or is empty (skill ran but produced nothing — extremely rare), set `PR_REVIEW_REPORT_PATHS` to an empty list. The final summary will show `none generated`.
+
 5. **Codex review (ONLY after step 4 is fully complete)**: Wait for `/review-pr-comments` to finish its entire autonomous loop (all iterations, up to 5 max) before proceeding. Then run `/codex-review` with the PR URL in autonomous mode to auto-fix Codex findings.
+
+   **5a. Capture Codex review report paths (runs IMMEDIATELY after step 5 returns).** Same pattern as step 4a, applied to `/Users/fabianodesouza/.claude/memory/ticket-reports/<TICKET>/codex-review/`. Collect every `<TICKET>-CODEX-REVIEW-*.md` (or `PR-<number>-CODEX-REVIEW-*.md`) into `CODEX_REVIEW_REPORT_PATHS`. Empty list ⇒ `none generated` in the final summary.
 
    **Auto-continue after this step (regardless of findings):** When Codex returns, proceed IMMEDIATELY to step 6 (E2E test). Possible Codex outcomes and what to do:
    - **Real issues found and auto-fixed** → fixes are already committed/pushed by the autonomous loop. Continue to step 6.
@@ -930,7 +938,7 @@ If you find yourself uncertain about whether to continue, the answer is always: 
      ```
      Then count added lines starting with `+` that contain `it(`, `test(`, or `it.each(`. Approximate is fine; "+18 tests across 3 files" is more useful than "exact line count". If no test files were modified (rare for TDD-first), report "0".
    - **Stage app version verified live** — The `Dynamic App Version: x.y.z` value the operator (or executor) read from the live page console after deploy. Skip this metric if E2E was opted-out.
-   - **Code review iteration counts** — Number of Cursor Bugbot findings + number of Codex findings addressed during the autonomous review loop. Sum per source. Pull from the iteration reports in `dynamic-app/pr-reviews/<TICKET>-PR-REVIEW-*.md` and `<TICKET>-CODEX-REVIEW-*.md` (which were stashed at the end of each loop — `git stash list` to find them, or count by reading the saved reports before they were stashed).
+   - **Code review iteration counts** — Number of Cursor Bugbot findings + number of Codex findings addressed during the autonomous review loop. Sum per source. Pull from the iteration reports preserved by steps 4a and 5a at `/Users/fabianodesouza/.claude/memory/ticket-reports/<TICKET>/pr-review/<TICKET>-PR-REVIEW-*.md` and `/Users/fabianodesouza/.claude/memory/ticket-reports/<TICKET>/codex-review/<TICKET>-CODEX-REVIEW-*.md`. The captured paths are available in `PR_REVIEW_REPORT_PATHS` and `CODEX_REVIEW_REPORT_PATHS`.
    - **New E2E learnings count** — Number of new entries appended to `~/.claude/memory/E2E/<projectDir>/learnings.md` during this run. The `e2e-test-jira-ticket` skill writes these conditionally; if it didn't write any (because nothing new was discovered), report "0".
 
    **Step 9c — Present the final summary in the format below:**
@@ -968,8 +976,8 @@ If you find yourself uncertain about whether to continue, the answer is always: 
    ### Artifacts
 
    - **E2E evidence:** `<comma-separated /tmp paths>` (or "n/a — E2E was skipped")
-   - **PR review reports:** stashed (`git stash list` to find — message starts with `PR review reports: <TICKET>`)
-   - **Codex review report:** stashed (`git stash list` — message starts with `Codex review report: <TICKET>`)
+   - **PR review reports:** one markdown link per file from `PR_REVIEW_REPORT_PATHS`, in iteration order — `[<TICKET>-PR-REVIEW-1.md](/Users/fabianodesouza/.claude/memory/ticket-reports/<TICKET>/pr-review/<TICKET>-PR-REVIEW-1.md)`, `[<TICKET>-PR-REVIEW-2.md](...)`, … (or `none generated` if the list is empty)
+   - **Codex review reports:** one markdown link per file from `CODEX_REVIEW_REPORT_PATHS`, in iteration order — `[<TICKET>-CODEX-REVIEW-1.md](/Users/fabianodesouza/.claude/memory/ticket-reports/<TICKET>/codex-review/<TICKET>-CODEX-REVIEW-1.md)`, … (or `none generated` if the list is empty)
    - **New E2E learnings:** `<count>` new entries in `~/.claude/memory/E2E/<projectDir>/learnings.md` (or "none — run was routine")
    - **Local docs:** `<PROJECT_ROOT>/dynamic-app/docs/learnings.md` (executor-written run notes)
    ```
