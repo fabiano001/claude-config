@@ -44,7 +44,7 @@ The operator MUST explicitly approve the plan via the 3-option question below be
 
 ### Pre-flight — Verify the PR is mergeable BEFORE building the plan (ALWAYS runs, gates everything else)
 
-1. Look up the open PR: `gh -R boatsgroup/<repo> pr list --head <TICKET-KEY> --state open --json number,url,headRefName,title --limit 1`. If no open PR is found, halt and append to `actionsTaken`: `"Deploy skipped — no open PR found for branch <TICKET-KEY>"`. Stop processing Rule C for this ticket.
+1. Look up the open PR: `gh -R boatsgroup/<repo> pr list --head <TICKET-KEY> --state open --json number,url,headRefName,title --limit 1`. If no open PR is found, **DO NOT halt immediately** — go to **Path 3d (post-merge recovery)** below first. Only after path 3d concludes nothing-to-do should the rule halt with `"Deploy skipped — no open PR + no prior partial-deploy state to recover"`.
 
 2. Fetch the PR's mergeability state and check status: `gh -R boatsgroup/<repo> pr view <PR_NUMBER> --json mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,isDraft`.
 
@@ -149,6 +149,90 @@ Repo-side branch protection allows the merge, but the operator's policy is to cl
 **Path 3c — Fully clean** (`MERGEABLE == true` AND `UNRESOLVED_COUNT == 0`):
 
 Proceed to build the numbered plan below using the PR's URL + number. The plan asks the 3-option deploy question as before.
+
+**Path 3d — Post-merge recovery** (`gh pr list --state open` returned empty):
+
+The ticket is in PROD READY but no open PR exists. This means a previous run merged the PR and either (a) finalized successfully (in which case the ticket SHOULD have left PROD READY — its presence here is anomalous, treat as a no-op), or (b) skipped finalization because the function-deploy gate failed. Path 3d handles case (b): re-check whether the operator has since run the manual function deploy and, if so, run the deploy tail-end (transition to Live + post resolution comment). If still pending, re-post the reminder.
+
+**Step 1 — Scan ticket comments for a partial-deploy marker.** Fetch comments via `mcp__atlassian__getJiraIssue` with `fields: ["comment"]` and `responseContentFormat: "markdown"`. Scan comments from newest to oldest, looking for the FIRST match against either form:
+
+- **Preferred (structured):** a fenced JSON code block (lang `jira-sprint-manager-state` or unlabeled) containing the literal key `"jira-sprint-manager:partial-deploy"`. The block's payload has shape:
+  ```json
+  {
+    "jira-sprint-manager:partial-deploy": {
+      "pending_functions": ["lendAPIWebhook", "anotherFunc"],
+      "merge_commit": "fd56a9b3c5b2ac1e7b067874fc700da1dbdd990e",
+      "merged_at": "2026-05-18T14:59:00Z"
+    }
+  }
+  ```
+  Parse the JSON and capture `pending_functions` (string array), `merged_at` (ISO timestamp).
+
+- **Legacy fallback:** a comment whose body starts with `# Deploy status — PARTIAL` (the iteration-2 / earlier comment format). Extract the function name from the parenthetical in the heading (e.g., `# Deploy status — PARTIAL (lendAPIWebhook NOT deployed)` → `pending_functions = ["lendAPIWebhook"]`). Use the comment's `created` timestamp as `merged_at` (best-effort; the actual merge timestamp is in the body text but parsing markdown for it is fragile).
+
+  If multiple function names appear in the parenthetical, split on `,` and trim — `(lendAPIWebhook, otherFunc NOT deployed)` → `["lendAPIWebhook", "otherFunc"]`.
+
+**Step 2 — If no marker found, halt path 3d.** Append to `actionsTaken`: `"Deploy skipped — no open PR + no prior partial-deploy state to recover (ticket may have left PROD READY normally and re-entered via some other path)."`. Stop processing Rule C for this ticket. The operator can hand-transition the ticket if needed.
+
+**Step 3 — Resolve every pending function via `gcloud functions describe`.** For each `<func>` in `pending_functions`:
+
+1. Run `gcloud functions describe <func> --project trident-funding --region=us-central1 --gen2 --format=json` (standalone Bash). The `--region` flag is **required** — `gcloud functions describe` errors with `Missing required argument [region]` if omitted. `us-central1` is the default region for Trident Firebase functions (verified 2026-05-18 for `lendAPIWebhook`). If the Gen 2 call returns the function but with `"environment": "GEN_1"` in the body, that's fine — Gen 2 CLI flag works for both generations on the boats-group projects.
+
+   On non-zero exit:
+   - Re-try without `--gen2`: `gcloud functions describe <func> --project trident-funding --region=us-central1 --format=json`.
+   - If still failing AND the error is `Region X not found`, mark as `UNKNOWN` (future enhancement: scan known regions like `us-east1`, `us-east4`, `europe-west1`).
+
+2. Extract `updateTime` (ISO 8601 — e.g., `"2026-05-18T15:21:35.856Z"`) from the JSON. Both Gen 1 and Gen 2 responses surface this field at the top level.
+
+3. Compare: if `updateTime > merged_at` → function has been redeployed since the merge → mark this function as `RESOLVED`. Else → mark as `STILL_PENDING`.
+
+4. **Failure modes:**
+   - `gcloud` not found / not authenticated → mark function as `UNKNOWN` (treat as still-pending for safety; print a one-line terminal warning so the operator knows the check couldn't run).
+   - JSON parse failure / no `updateTime` field → mark as `UNKNOWN`.
+   - Region mismatch (function exists in a non-default region) → mark as `UNKNOWN`; print a terminal warning suggesting the operator pass an explicit region or extend this rule.
+   - Auto-mode classifier blocked the call (error mentions "auto mode classifier" / "permission denied" from Claude Code's tool wrapper, NOT a gcloud-side non-zero exit) → mark as `CLASSIFIER_BLOCKED`. With the `Bash(gcloud functions describe:*)` allow rule in `~/.claude/settings.json` and the CLAUDE.md authorization both active, this should be rare. When it does happen, see Step 4c below.
+
+**Step 4 — Branch on resolution status:**
+
+**4a. Every function is `RESOLVED`** → run the deploy tail-end:
+
+1. Re-evaluate the finalization gate (merge happened in a prior run; CICD watch is no longer possible since we're past it; function-deploy gate now passes). The gate is satisfied.
+
+2. Look up the `Live` transition via `mcp__atlassian__getTransitionsForJiraIssue`. Find `to.name == "Live"` (case-sensitive). Execute `mcp__atlassian__transitionJiraIssue` with that id.
+
+3. Assign the ticket to **Fabiano Desouza** (`accountId: 5a6765563c7f1842c3d7b806`) via `mcp__atlassian__editJiraIssue` with `fields: { "assignee": { "accountId": "5a6765563c7f1842c3d7b806" } }`.
+
+4. Update in-memory `fields.status.name = "Live"` so Step 3 sort puts the ticket in priority bucket 2.
+
+5. Post a "Deploy status — RESOLVED" Jira comment that supersedes the prior PARTIAL marker. See `references/jira-deploy-comment-template.md` section "Resolved-post-merge template" for the exact body format. Include the previously-pending function name(s), the verified `updateTime`(s), and a one-line note that the ticket has now been transitioned to Live.
+
+6. Append to `actionsTaken`: `"Post-merge recovery: all previously-pending function deploys verified (<func1>@<updateTime1>, <func2>@<updateTime2>). Transitioned to Live and assigned to Fabiano. Posted RESOLVED Jira comment."`.
+
+7. **Back-edge chain into Rule B (interactive mode only).** The ticket just transitioned to `Live`. Immediately re-invoke Rule B's per-ticket evaluation on this ticket. Rule B's appended `actionsTaken` entries stack additively on top of the entry from step 6. The chain typically queues the Live QA kickoff question (since a freshly-Live ticket almost never has a `live qa pass` marker yet). In **autonomous mode**, skip this chain entirely — Rule B is skipped in autonomous mode, and Rule C's path 3d also doesn't run there.
+
+**4c. At least one function is `CLASSIFIER_BLOCKED` AND no function is `STILL_PENDING`** → fallback verification via operator-confirmation comment. (This branch is evaluated BEFORE 4b — a `CLASSIFIER_BLOCKED` outcome with a qualifying operator comment finalizes via fallback; without one it reclassifies to `UNKNOWN` and falls through to 4b.)
+
+1. Re-scan the ticket's comments (already fetched at the start of path 3d — no extra API call) for any comment whose `created` timestamp is **strictly after `merged_at`** AND whose body contains EVERY function name in the original `pending_functions` list (case-insensitive substring match). For example, an operator comment like `"Manually deployed GCP functions submitApp and lendAPIWebhook."` qualifies because both function names appear and it was posted after the merge.
+
+2. **No qualifying comment found** → reclassify the `CLASSIFIER_BLOCKED` function(s) as `UNKNOWN` and fall through to **Step 4b** (re-post reminder, no transition). Emit a terminal warning: `"<TICKET-KEY>: gcloud blocked by classifier and no post-merge confirmation comment found — treating as still-pending."`. The reminder in 4b should additionally mention that the gcloud check was blocked so the operator knows why automation halted.
+
+3. **Qualifying comment found** → proceed with Step 4a's tail-end (transition to `Live` + assign + post RESOLVED Jira comment + back-edge chain into Rule B), with TWO modifications:
+   - The Jira comment uses the **fallback variant** template — see `references/jira-deploy-comment-template.md` section *"Resolved-post-merge template (fallback variant — gcloud check unavailable)"*. The "Source comment" section must quote the actual operator comment body (truncated to ~240 chars if longer) and include the author + timestamp.
+   - The `actionsTaken` entry uses the fallback phrasing: `"Post-merge recovery (fallback — gcloud check unavailable): operator confirmation comment by <author> at <comment-timestamp> covers all pending functions (<funcs>). Transitioned to Live and assigned to Fabiano. Posted RESOLVED Jira comment marked as fallback."`. This wording makes the fallback path discoverable in the daily sprint report.
+
+4. **Staleness guard.** The fallback path explicitly does NOT fire when the operator's confirmation comment was posted **before** `merged_at` — a stale "I deployed it" from a prior partial-deploy run does NOT retroactively satisfy a later merge's gap. The lower bound is `merged_at`, NOT a rolling N-hour window. This guard is what makes the fallback safe: it can only validate a deploy that physically could have happened after the merge it's supposed to resolve.
+
+5. **Mixed-outcome rule.** If any function is `STILL_PENDING` (gcloud succeeded and reported the function was last deployed before `merged_at`), do NOT use the fallback even if other functions are `CLASSIFIER_BLOCKED` with qualifying comments — the `STILL_PENDING` signal is direct evidence the deploy never happened. Skip 4c entirely and go to 4b.
+
+**4b. At least one function is `STILL_PENDING` or `UNKNOWN`** → re-post the reminder:
+
+1. Do NOT transition. Do NOT post a new Jira comment (the prior PARTIAL marker is still authoritative).
+
+2. Append to `actionsTaken`: `"Post-merge recovery check: manual function deploy still pending for <funcs>. Status verified via gcloud functions describe."`. If any function is `UNKNOWN`, also mention: `"<funcs-unknown>: gcloud check failed (see terminal warning), treating as pending."`.
+
+3. Append to `REMINDERS`: `"<TICKET-KEY>: Manual function deploy STILL pending — run \`npx firebase --project trident-funding deploy --only functions:<comma-separated funcs>\` from <repo path>, then re-run /jira-sprint-manager so it can verify and finalize the ticket. (Pending since merge at <merged_at>.)"`.
+
+4. Next run will re-check; the ticket stays in PROD READY until every pending function shows `updateTime > merged_at`.
 
 ## Plan steps (only present when MERGEABLE and UNRESOLVED_COUNT == 0)
 
@@ -257,6 +341,7 @@ Options (exactly these, in this order):
    3. Assign the ticket to **Fabiano Desouza** (`accountId: 5a6765563c7f1842c3d7b806`) via `mcp__atlassian__editJiraIssue` with `fields: { "assignee": { "accountId": "5a6765563c7f1842c3d7b806" } }`.
    4. Update the in-memory ticket: set `fields.status.name` to `"Live"` so the Step 3 sort places it in priority bucket `2` (LIVE column) and the rendered report's heading + Current Status bullet reflect the new state.
    5. Append to `actionsTaken`: `"Transitioned to Live and assigned to Fabiano Desouza"`.
+   6. **Back-edge chain into Rule B (interactive mode only).** The ticket is now `Live`. Immediately re-invoke Rule B's per-ticket evaluation on this ticket. Rule B's appended `actionsTaken` entries stack additively on top of step 5's entry. The chain typically queues Rule B's Live QA kickoff question (since a freshly-Live ticket almost never has a `live qa pass` marker yet). The chain runs AFTER Rule C's step 8 Jira success comment is posted, so the comment captures the deploy details while Rule B's question to the operator captures next-action intent. In **autonomous mode**, skip this chain — Rule B is skipped in autonomous mode (and Rule C path 3c also can't run there because of the 3-option question).
 
    **Failure modes (soft — record and continue):**
    - `getTransitionsForJiraIssue` or `transitionJiraIssue` errors → append `"Transition to Live failed: <verbatim error>"` to `actionsTaken`. Continue.

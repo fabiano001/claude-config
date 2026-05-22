@@ -4,9 +4,11 @@ Used by `jira-sprint-manager` Step 2.5. The summary + flowchart live in SKILL.md
 
 ## Trigger
 
-The response contains at least ONE ticket whose `fields.status.name == "Live"`.
+The response contains at least ONE ticket whose `fields.status.name == "Live"` at the start of the run.
 
-## Per-Live-ticket handling (apply in board order — top of the Live lane first)
+Rule B is ALSO invoked via the **Rule C → Rule B back-edge chain** on any ticket Rule C transitions to `Live` during the same run (path 3c full success or path 3d resolution). See `rule-c-prod-deploy.md` and SKILL.md "Interaction order across rules" for the chain mechanics. For chained tickets, Rule B runs the same per-ticket evaluation described below, and its `actionsTaken` entries stack on top of Rule C's entry. A freshly-deployed chained ticket almost never has a `live qa pass` marker yet, so step 2 below typically queues the Live QA kickoff question for the operator.
+
+## Per-Live-ticket handling (apply in board order — top of the Live lane first; chained tickets are appended to the end of the per-rule iteration after the forward-sweep Live tickets are done)
 
 1. **Fetch the ticket's comments.** Use `mcp__atlassian__getJiraIssue` with:
    - `cloudId`: `ba2e3477-a4e5-4924-a530-47c471494d0f`

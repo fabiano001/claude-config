@@ -162,6 +162,20 @@ If you skip TDD without an explicit justification from this list, you are violat
 
 **Drive every E2E flow manually using `playwright-cli` directly. Do NOT invoke any bundled funnel-driving scripts** (any `*-flow.sh`, any project-bundled "happy path" wrapper, or any pre-baked "drive the whole funnel in one Bash call" script). Project funnels drift faster than these scripts get maintained, and a stale script will burn iteration budget on selector debugging while reporting a misleading exit code 0. The `playwright-cli` tool wraps every action in a single `playwright-cli run-code` call that exits cleanly even on an internal `TimeoutError`, so a wrapper script's "Flow complete" line tells you nothing about whether the flow actually completed.
 
+### Artifact-path convention (screenshots, JSON dumps, snapshots, function-describes, etc.)
+
+Every artifact captured during the E2E step — canonical captures from the delegated `e2e-test-jira-ticket` skill AND any ad-hoc captures the executor takes (per-step screenshots while debugging, intermediate dataLayer dumps, GCP function-describe outputs, webhook log dumps, etc.) — MUST land under the per-ticket memory directory:
+
+```
+~/.claude/memory/ticket-reports/<TICKET>/artifacts/
+```
+
+Create the directory once at the start of the E2E step: `mkdir -p ~/.claude/memory/ticket-reports/<TICKET>/artifacts` (standalone Bash). Name files with a `<TICKET>-` prefix and a short descriptor (e.g., `TRIDENT-904-e2e-final.png`, `TRIDENT-904-datalayer.json`, `TRIDENT-904-borrower-previous-employer-FILLED.png`, `TRIDENT-904-lendapi-webhook-live-log.json`).
+
+**Do NOT write artifacts to `/tmp`.** `/tmp` is volatile on macOS (reboot wipes it) and Jira comments referencing those paths break the moment the operator opens them the next day. The memory directory is durable and per-ticket so the QA Pass comment's "Local artifacts captured" section stays valid.
+
+The same convention applies to the `e2e-test-jira-ticket` skill (Mode 2 embedded by this skill, and Mode 3 live-QA) — that skill writes its canonical artifacts under the same `ARTIFACTS_DIR`. See [e2e-test-jira-ticket SKILL.md Step 6](../e2e-test-jira-ticket/SKILL.md#step-6--capture-evidence) for the full contract.
+
 ### The loop
 
 For each tab/step in the funnel, repeat:
@@ -261,8 +275,8 @@ Append entries to `learnings.md` (do NOT overwrite the file). Each entry:
 
 ### Bash for read/write (no compound commands, no command substitution)
 
-- **Read:** Use the `Read` tool on `/Users/<user>/.claude/memory/E2E/<projectDir>/learnings.md`. If it returns "file does not exist," skip silently.
-- **Create directory if missing:** `mkdir -p /Users/<user>/.claude/memory/E2E/<projectDir>` as a standalone Bash call.
+- **Read:** Use the `Read` tool on `~/.claude/memory/E2E/<projectDir>/learnings.md`. If it returns "file does not exist," skip silently.
+- **Create directory if missing:** `mkdir -p ~/.claude/memory/E2E/<projectDir>` as a standalone Bash call.
 - **Write/append:** Use the `Write` tool (with the full prior contents + new entry appended) — do NOT use shell redirection (`>>`) or `echo`.
 
 ---
@@ -430,10 +444,10 @@ You are **Ticket Driver**, a delivery-focused tech lead who works interactively 
 0a) **Log session to `~/.claude/memory/sessions.md` (MANDATORY — runs immediately after step 0, applies to BOTH standard mode and PLAN-MODE).** Append a `ticket-driver` entry to the session log so future sessions can locate this run. Steps:
 
    1. **Resolve the ticket key for the header.** Use the ticket name as passed in arguments (including any `-TEST-<N>` suffix — the header should reflect exactly what the operator invoked the skill with, not the Jira-resolved key).
-   2. **Get the current Claude session ID** — Run `ls -t /Users/fabianodesouza/.claude/projects/` (standalone Bash, no pipes) to find the most-recently-modified project subdirectory. Then run `ls -t /Users/fabianodesouza/.claude/projects/<that-subdir>/` to list its files; the first `.jsonl` filename (minus the `.jsonl` extension) is the current session UUID.
+   2. **Get the current Claude session ID** — Run `ls -t ~/.claude/projects/` (standalone Bash, no pipes) to find the most-recently-modified project subdirectory. Then run `ls -t ~/.claude/projects/<that-subdir>/` to list its files; the first `.jsonl` filename (minus the `.jsonl` extension) is the current session UUID.
    3. **Get repo/dir** — Run `git rev-parse --show-toplevel` (standalone Bash). On success, take the basename. On failure (not a git repo), run `pwd` and use its basename. **Do NOT strip `-worktree-<N>` suffixes** — the operator needs to know exactly which worktree was used.
    4. **Get the date** — Run `date +%Y-%m-%d` (standalone Bash).
-   5. **Read** `/Users/fabianodesouza/.claude/memory/sessions.md` with the Read tool. If the file does not exist, treat existing content as empty.
+   5. **Read** `~/.claude/memory/sessions.md` with the Read tool. If the file does not exist, treat existing content as empty.
    6. **Check for an existing entry for this ticket** — Look for a line that matches `# <TICKET_KEY>` exactly OR `# <TICKET_KEY> (...)` (ticket key followed by a parenthetical description). The match is on the ticket key only.
       - **If the ticket header exists:**
         - **Idempotency check:** If the section already contains a `## ticket-driver` (or `## ticket-driver (plan mode)`) subentry whose `session id:` matches the current session UUID AND whose subentry kind matches the current mode (standard vs plan), SKIP the insertion (this is a re-run of the same session in the same mode). Print `"Session already logged for <TICKET_KEY>; skipping."` and continue with the workflow.
@@ -784,7 +798,7 @@ Use the Read tool to read these files. Internalize their contents as project rul
 Do NOT skip this step. Do NOT proceed to Step 1 until you have read and internalized these files.
 
 Step 1 — Write initial status.md:
-Write PROJECT_ROOT/dynamic-app/docs/status.md with all tasks from the HIGH LEVEL PLAN as unchecked items ([ ] 1. task ...).
+Write PROJECT_ROOT/dynamic-app/docs/status.md with EVERY task from the HIGH LEVEL PLAN as unchecked items ([ ] 1. task ...). This includes the implementation/test tasks YOU will execute below AND the post-executor tasks the parent ticket-driver agent owns (review-pr-comments, codex-review, E2E test, QA Pass Jira comment, Jira finalization). Do NOT trim the list to just the coding tasks — the parent agent reads back this same file and ticks off the remaining items as each post-executor step completes. The status.md file is the single source of truth for "where is this ticket in its lifecycle?"; an incomplete list defeats that.
 
 Step 2 — Execute tasks in a loop:
 Repeat the following 3-step cycle for EACH task in order. Do not skip any step.
@@ -793,7 +807,7 @@ Repeat the following 3-step cycle for EACH task in order. Do not skip any step.
   Follow TDD-first rules (write tests FIRST, implement SECOND). Exceptions: pure config changes, dependency updates with no logic, trivial one-line fixes already covered by tests. Use the Edit tool for all code changes. Keep diffs minimal. Run lint, typecheck, and tests after each implementation chunk. Iterate until green.
 
   Step 2b — Update status.md (MANDATORY after every task):
-  Use the Edit tool to change [ ] to [x] for the task you just completed in PROJECT_ROOT/dynamic-app/docs/status.md. This is not optional. Do this immediately after each task passes, before starting the next task.
+  Use the Edit tool to change [ ] to [x] for the task you just completed in PROJECT_ROOT/dynamic-app/docs/status.md. This is not optional. Do this immediately after each task passes, before starting the next task. Only tick the items YOU executed in this loop — leave the post-executor items (review-pr-comments, codex-review, E2E, QA Pass Jira comment, Jira finalization) unchecked. The parent agent ticks those off as it processes them after you return.
 
   Step 2c — Move to the next task and repeat from Step 2a.
 
@@ -830,6 +844,26 @@ Specifically: completing a "review" step (review-pr-comments OR codex-review) is
 
 If you find yourself uncertain about whether to continue, the answer is always: **continue**. The operator only steps in when you explicitly tell them you have stopped.
 
+**STATUS.MD CONTRACT (HARD RULE — applies to every step in this section):**
+
+The executor wrote `<PROJECT_ROOT>/dynamic-app/docs/status.md` at its Step 1 with EVERY task from the HIGH LEVEL PLAN as unchecked items — including the post-executor tasks (review-pr-comments, codex-review, E2E test, QA Pass Jira comment, Jira finalization). The executor's Step 2b only ticks off the coding tasks it owns; the parent agent (this section) owns the rest.
+
+**After EACH numbered step below completes**, immediately use the Edit tool to flip the matching `[ ]` to `[x]` in `<PROJECT_ROOT>/dynamic-app/docs/status.md` BEFORE moving to the next step. The mapping from this section's step numbers to the typical HIGH LEVEL PLAN line items is:
+
+| Step in this section | HIGH LEVEL PLAN item (example numbering) | When to tick |
+|---|---|---|
+| 4. Review PR comments | `9. Run /review-pr-comments …` | After step 4a captures the report paths. |
+| 5. Codex review | `10. Run /codex-review …` | After step 5a captures the report paths. |
+| 6. E2E test | `11. E2E test using Playwright CLI …` | After the `e2e-test-jira-ticket` skill returns, regardless of pass/fail. If E2E failed, the item is still "completed" — the failure is recorded in `E2ETEST-Report.md`, not as an unchecked status. |
+| 7. QA Pass Jira comment | `12. On E2E pass: post "QA Pass …" Jira comment` | After the comment posts, OR after deciding to skip per the skip rules (E2E failed / E2E opted out). Both outcomes count as the item being processed. |
+| 8. Jira finalization | `13. On success: transition Jira ticket …` | After the transition + assign + worklog land, OR after deciding to skip per the skip rules. |
+
+If the HIGH LEVEL PLAN's numbering differs from the example (e.g., E2E was opted out so the plan has fewer items), match by task description rather than by number — pick the line in status.md whose text matches the step's intent.
+
+Do NOT batch the status.md updates at the end. Each step's tick happens IMMEDIATELY after that step finishes so the operator (or a debugging run) can read status.md mid-flight and see exactly where things stand. The same Edit-tool rule the executor used in its Step 2b applies here.
+
+If a step is genuinely SKIPPED (e.g., E2E opted out during planning means the E2E line was never written into status.md to begin with, OR the Jira finalization step decided the ticket was already past "In Progress"), do not tick anything — the missing or already-resolved line stays as it is. Only tick items that the step actually performed.
+
 ---
 
 1. **Read the learnings file**: Read `<PROJECT_ROOT>/dynamic-app/docs/learnings.md`
@@ -837,14 +871,14 @@ If you find yourself uncertain about whether to continue, the answer is always: 
 3. **Wait for review bots**: Run `sleep 1200` as a **foreground blocking Bash call** — do NOT use `run_in_background`. The command must block execution for the full 20 minutes before proceeding. Set the Bash tool timeout to at least 1300000ms to prevent it from timing out early.
 4. **Review PR comments**: Invoke the skill with exactly: `/review-pr-comments <PR_URL> autonomous` — The "autonomous" keyword triggers the skill's auto-fix loop (Auto Steps A→B→C→D) which fixes issues, commits, pushes, sleeps 20 minutes, re-checks for new comments, and repeats up to 5 iterations until no new fixable issues remain.
 
-   **4a. Capture PR review report paths (runs IMMEDIATELY after step 4 returns).** The `/review-pr-comments` skill writes its reports directly to `/Users/fabianodesouza/.claude/memory/ticket-reports/<TICKET>/pr-review/`. No stash dance, no copy — the files are already at the durable location. This step just records the paths for the final summary.
-   1. List the directory: `ls /Users/fabianodesouza/.claude/memory/ticket-reports/<TICKET>/pr-review/` (standalone Bash).
+   **4a. Capture PR review report paths (runs IMMEDIATELY after step 4 returns).** The `/review-pr-comments` skill writes its reports directly to `~/.claude/memory/ticket-reports/<TICKET>/pr-review/`. No stash dance, no copy — the files are already at the durable location. This step just records the paths for the final summary.
+   1. List the directory: `ls ~/.claude/memory/ticket-reports/<TICKET>/pr-review/` (standalone Bash).
    2. Collect every `<TICKET>-PR-REVIEW-*.md` (or `PR-<number>-REVIEW-*.md`) filename into `PR_REVIEW_REPORT_PATHS`, prefixing each with the absolute directory path.
    3. If the directory does not exist or is empty (skill ran but produced nothing — extremely rare), set `PR_REVIEW_REPORT_PATHS` to an empty list. The final summary will show `none generated`.
 
 5. **Codex review (ONLY after step 4 is fully complete)**: Wait for `/review-pr-comments` to finish its entire autonomous loop (all iterations, up to 5 max) before proceeding. Then run `/codex-review` with the PR URL in autonomous mode to auto-fix Codex findings.
 
-   **5a. Capture Codex review report paths (runs IMMEDIATELY after step 5 returns).** Same pattern as step 4a, applied to `/Users/fabianodesouza/.claude/memory/ticket-reports/<TICKET>/codex-review/`. Collect every `<TICKET>-CODEX-REVIEW-*.md` (or `PR-<number>-CODEX-REVIEW-*.md`) into `CODEX_REVIEW_REPORT_PATHS`. Empty list ⇒ `none generated` in the final summary.
+   **5a. Capture Codex review report paths (runs IMMEDIATELY after step 5 returns).** Same pattern as step 4a, applied to `~/.claude/memory/ticket-reports/<TICKET>/codex-review/`. Collect every `<TICKET>-CODEX-REVIEW-*.md` (or `PR-<number>-CODEX-REVIEW-*.md`) into `CODEX_REVIEW_REPORT_PATHS`. Empty list ⇒ `none generated` in the final summary.
 
    **Auto-continue after this step (regardless of findings):** When Codex returns, proceed IMMEDIATELY to step 6 (E2E test). Possible Codex outcomes and what to do:
    - **Real issues found and auto-fixed** → fixes are already committed/pushed by the autonomous loop. Continue to step 6.
@@ -938,7 +972,7 @@ If you find yourself uncertain about whether to continue, the answer is always: 
      ```
      Then count added lines starting with `+` that contain `it(`, `test(`, or `it.each(`. Approximate is fine; "+18 tests across 3 files" is more useful than "exact line count". If no test files were modified (rare for TDD-first), report "0".
    - **Stage app version verified live** — The `Dynamic App Version: x.y.z` value the operator (or executor) read from the live page console after deploy. Skip this metric if E2E was opted-out.
-   - **Code review iteration counts** — Number of Cursor Bugbot findings + number of Codex findings addressed during the autonomous review loop. Sum per source. Pull from the iteration reports preserved by steps 4a and 5a at `/Users/fabianodesouza/.claude/memory/ticket-reports/<TICKET>/pr-review/<TICKET>-PR-REVIEW-*.md` and `/Users/fabianodesouza/.claude/memory/ticket-reports/<TICKET>/codex-review/<TICKET>-CODEX-REVIEW-*.md`. The captured paths are available in `PR_REVIEW_REPORT_PATHS` and `CODEX_REVIEW_REPORT_PATHS`.
+   - **Code review iteration counts** — Number of Cursor Bugbot findings + number of Codex findings addressed during the autonomous review loop. Sum per source. Pull from the iteration reports preserved by steps 4a and 5a at `~/.claude/memory/ticket-reports/<TICKET>/pr-review/<TICKET>-PR-REVIEW-*.md` and `~/.claude/memory/ticket-reports/<TICKET>/codex-review/<TICKET>-CODEX-REVIEW-*.md`. The captured paths are available in `PR_REVIEW_REPORT_PATHS` and `CODEX_REVIEW_REPORT_PATHS`.
    - **New E2E learnings count** — Number of new entries appended to `~/.claude/memory/E2E/<projectDir>/learnings.md` during this run. The `e2e-test-jira-ticket` skill writes these conditionally; if it didn't write any (because nothing new was discovered), report "0".
 
    **Step 9c — Present the final summary in the format below:**
@@ -975,9 +1009,9 @@ If you find yourself uncertain about whether to continue, the answer is always: 
 
    ### Artifacts
 
-   - **E2E evidence:** `<comma-separated /tmp paths>` (or "n/a — E2E was skipped")
-   - **PR review reports:** one markdown link per file from `PR_REVIEW_REPORT_PATHS`, in iteration order — `[<TICKET>-PR-REVIEW-1.md](/Users/fabianodesouza/.claude/memory/ticket-reports/<TICKET>/pr-review/<TICKET>-PR-REVIEW-1.md)`, `[<TICKET>-PR-REVIEW-2.md](...)`, … (or `none generated` if the list is empty)
-   - **Codex review reports:** one markdown link per file from `CODEX_REVIEW_REPORT_PATHS`, in iteration order — `[<TICKET>-CODEX-REVIEW-1.md](/Users/fabianodesouza/.claude/memory/ticket-reports/<TICKET>/codex-review/<TICKET>-CODEX-REVIEW-1.md)`, … (or `none generated` if the list is empty)
+   - **E2E evidence:** comma-separated artifact paths from `~/.claude/memory/ticket-reports/<TICKET>/artifacts/` (e.g., `<TICKET>-datalayer.json`, `<TICKET>-e2e-final.png`, `<TICKET>-final-snapshot.yml`, plus any ad-hoc captures the executor took during the run). All captures live under that durable per-ticket directory — never `/tmp`. Show "n/a — E2E was skipped" when the operator opted out of E2E during planning.
+   - **PR review reports:** one markdown link per file from `PR_REVIEW_REPORT_PATHS`, in iteration order — `[<TICKET>-PR-REVIEW-1.md](~/.claude/memory/ticket-reports/<TICKET>/pr-review/<TICKET>-PR-REVIEW-1.md)`, `[<TICKET>-PR-REVIEW-2.md](...)`, … (or `none generated` if the list is empty)
+   - **Codex review reports:** one markdown link per file from `CODEX_REVIEW_REPORT_PATHS`, in iteration order — `[<TICKET>-CODEX-REVIEW-1.md](~/.claude/memory/ticket-reports/<TICKET>/codex-review/<TICKET>-CODEX-REVIEW-1.md)`, … (or `none generated` if the list is empty)
    - **New E2E learnings:** `<count>` new entries in `~/.claude/memory/E2E/<projectDir>/learnings.md` (or "none — run was routine")
    - **Local docs:** `<PROJECT_ROOT>/dynamic-app/docs/learnings.md` (executor-written run notes)
    ```
