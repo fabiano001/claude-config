@@ -67,7 +67,7 @@ Produce **only** the following sections, in order, with concise, concrete wordin
          - **Multiple functions** — combine all targets into a single comma-separated `--only` argument (no spaces around commas). Example for two functions: `npx firebase --project trident-funding deploy --only functions:lendAPIWebhook,functions:getLendAPIApprovalData`
        - Ensure that your .env file under the functions folder has the Prod values in it prior to deploy
 
-   Replace `TRIDENT-XXX` with the actual ticket name. `xxx` is a placeholder for the GCP function name — it can be changed manually later. **If multiple GCP functions are affected, use a single deploy command with comma-separated `functions:<name>` targets** (do not duplicate the deploy line per function). If no GCP functions are affected, omit the “Deploy GCP functions” sub-sections.
+   Replace `TRIDENT-XXX` with the actual ticket key the user provides in step 4 (the same key used for session logging). If the user skips that prompt, keep `TRIDENT-XXX` as the placeholder. `xxx` is a placeholder for the GCP function name — it can be changed manually later. **If multiple GCP functions are affected, use a single deploy command with comma-separated `functions:<name>` targets** (do not duplicate the deploy line per function). If no GCP functions are affected, omit the “Deploy GCP functions” sub-sections.
 
 7. **Rollback Steps**
    - Create revert PR
@@ -91,6 +91,9 @@ Produce **only** the following sections, in order, with concise, concrete wordin
 - If the description implies risks, add a short note inside **Technical Details** or **Testing Methodology** on how to detect/mitigate them (only if relevant).
 
 ### 4) Write the file immediately
+- **First, ask the user for the Jira ticket key** so it can be substituted into Deployment Notes AND reused for session logging in step 5. Ask exactly once: **"What Jira ticket key should I use for this ticket (substituted into Deployment Notes and used for session logging in `~/.claude/memory/sessions.md`)? (e.g., `TRIDENT-892`, or reply `skip` to keep `TRIDENT-XXX` as placeholder and skip logging.)"** Wait for the response. Remember the answer for both step 4 (file write) and step 5 (session logging) — do NOT re-ask in step 5.
+  - If the user provides a key (e.g., `TRIDENT-917`), substitute it verbatim for every occurrence of `TRIDENT-XXX` in the Deployment Notes section when writing the file.
+  - If the user replies `skip` (or anything that clearly means skip — "no", "none", empty input), leave `TRIDENT-XXX` as the literal placeholder in Deployment Notes and skip session logging in step 5.
 - Check if `temp/ticket-output.md` already exists. If it does, increment the filename: `temp/ticket-output-2.md`, `temp/ticket-output-3.md`, etc. Use the first available filename that doesn't exist.
 - Create the markdown file with the ticket text using this exact format:
   ```
@@ -127,7 +130,7 @@ Produce **only** the following sections, in order, with concise, concrete wordin
 
 Append a `ticket-creation` entry to the session log. Steps:
 
-1. **Ask the user for the Jira ticket key.** ALWAYS prompt — at this point the user has typically just created the Jira ticket from the drafted text and now has a real key to paste. Ask exactly once: **"What Jira ticket key should I log this session under in `~/.claude/memory/sessions.md`? (e.g., `TRIDENT-892`, or reply `skip` to skip logging.)"** Wait for the response. If the user replies `skip` (or anything that clearly means skip — "no", "none", empty input), skip this entire step and exit. Otherwise, use the provided key verbatim (uppercase, including the project prefix and number, e.g., `TRIDENT-892`).
+1. **Reuse the Jira ticket key collected in step 4.** Do NOT re-prompt — the key (or `skip` signal) was already gathered before the file was written, so it could be substituted into Deployment Notes. If the user replied `skip` in step 4, skip this entire step and exit. Otherwise, use the provided key verbatim (uppercase, including the project prefix and number, e.g., `TRIDENT-892`).
 
 2. **Get the current Claude session ID** — Run `ls -t /Users/fabianodesouza/.claude/projects/` (standalone Bash, no pipes) to find the most-recently-modified project subdirectory; that is the active project's session dir. Then run `ls -t /Users/fabianodesouza/.claude/projects/<that-subdir>/` to list its files; the first `.jsonl` filename (minus the `.jsonl` extension) is the current session UUID.
 

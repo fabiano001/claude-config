@@ -1,4 +1,4 @@
-Base directory for this skill: /Users/fabianodesouza/.claude/skills/e2e-test-jira-ticket
+Base directory for this skill: ~/.claude/skills/e2e-test-jira-ticket
 
 # e2e-test-jira-ticket
 
@@ -107,7 +107,7 @@ In Mode 1, draft a **3-item proposal** (URL / deploy / verify). In Mode 3 (live-
 1. **Fetch the Jira ticket** via `mcp__atlassian__getJiraIssue` (cloudId `ba2e3477-a4e5-4924-a530-47c471494d0f`, issueIdOrKey is the ticket key). Note: strip any `-TEST` / `-TEST-<N>` suffix when calling the API; keep the original ticket key for everything else.
 2. **Fetch Acceptance Criteria** via `/fetch-jira-acceptance-criteria <key>` (which knows the custom-field plumbing).
 3. **Read the diff** (Mode 1 only — improves deploy-command quality): run `git -C <PROJECT_ROOT> diff main...HEAD --stat` to get the touched files. If that errors (no main/master), skip silently. **In Mode 3, skip this step** — there is no deploy to derive from the diff, and the deployed-to-stage code is the source of truth, not the local branch.
-4. **Read prior E2E learnings**: try to Read `/Users/<user>/.claude/memory/E2E/<projectDir>/learnings.md`. If it doesn't exist, skip silently.
+4. **Read prior E2E learnings**: try to Read `~/.claude/memory/E2E/<projectDir>/learnings.md`. If it doesn't exist, skip silently.
 5. **Draft the proposal** using the heuristics below. Each item must be specific and actionable — no placeholders. Mode 3 drafts items 1 and 3 only (skip item 2).
 
    **Drafting heuristics:**
@@ -252,11 +252,23 @@ URL or deploy command substitutions are NOT permitted. If either appears wrong m
 
 ### Step 6 — Capture evidence
 
-Capture whatever item 3 requires. Common artifacts:
-- **Full dataLayer JSON** — write to `/tmp/<TICKET>-datalayer.json` via `playwright-cli eval` + the Write tool.
-- **Final-page screenshot** — `playwright-cli screenshot --filename "/tmp/<TICKET>-e2e-final.png" --full-page`.
-- **Snapshot YAML** — `playwright-cli snapshot --filename "/tmp/<TICKET>-final-snapshot.yml"`.
-- **Console log** — automatically saved by playwright-cli to `<PROJECT_ROOT>/.playwright-cli/console-*.log`.
+**Artifacts directory contract — set this up ONCE per run before capturing anything.** Every artifact this skill writes (canonical captures listed below AND any ad-hoc captures the executor decides to take mid-flow — per-step screenshots, intermediate JSON dumps, GCP function-describe outputs, webhook log dumps, etc.) MUST land under the per-ticket artifacts directory:
+
+```
+ARTIFACTS_DIR=~/.claude/memory/ticket-reports/<TICKET>/artifacts
+```
+
+Before capturing any artifact, create the directory: `mkdir -p ~/.claude/memory/ticket-reports/<TICKET>/artifacts` (standalone Bash call). Reuse the same directory across runs — older artifacts coexist with the current run's outputs and are easy to clean up manually if needed.
+
+**Do NOT write artifacts to `/tmp`.** `/tmp` is volatile on macOS (reboot wipes it) and shared by every running process, so artifacts referenced from Jira comments or durable failure reports can vanish before the operator opens them. The memory directory is durable and per-ticket so the audit trail outlives the run.
+
+Capture whatever item 3 requires. Common artifacts (paths shown verbatim — substitute `<TICKET>`):
+- **Full dataLayer JSON** — write to `~/.claude/memory/ticket-reports/<TICKET>/artifacts/<TICKET>-datalayer.json` via `playwright-cli eval` + the Write tool.
+- **Final-page screenshot** — `playwright-cli screenshot --filename "~/.claude/memory/ticket-reports/<TICKET>/artifacts/<TICKET>-e2e-final.png" --full-page`.
+- **Snapshot YAML** — `playwright-cli snapshot --filename "~/.claude/memory/ticket-reports/<TICKET>/artifacts/<TICKET>-final-snapshot.yml"`.
+- **Console log** — automatically saved by playwright-cli to `<PROJECT_ROOT>/.playwright-cli/console-*.log`. Leave this where playwright-cli writes it (it's tied to the project, not the ticket); reference the path from the Jira comment's "Local artifacts captured" section if relevant.
+
+**Ad-hoc captures (per-step screenshots, intermediate JSON, function-describe dumps, webhook log captures, etc.)** follow the same convention. Name them descriptively with the ticket key prefix: `<TICKET>-<short-descriptor>.<ext>` (e.g., `TRIDENT-904-borrower-previous-employer-FILLED.png`, `TRIDENT-904-lendapi-webhook-live-log.json`, `TRIDENT-904-function-describe.json`). Place them in the same `ARTIFACTS_DIR`.
 
 ### Step 7 — Decide outcome
 
@@ -287,7 +299,7 @@ Stop the loop when verify passes (→ Step 8) OR after 5 iterations (→ Step 9)
 ### Step 8 — Success path: close, learnings, return (+ Mode-3 durable report and Jira comment)
 
 1. Close the browser: `playwright-cli close`.
-2. **Conditional learnings write** — only if there's something *new* to record. Re-read `/Users/<user>/.claude/memory/E2E/<projectDir>/learnings.md` and compare against what you'd write. Skip if a near-duplicate exists. Update an existing entry in place (rewriting its mitigation to current best advice) if the existing entry is stale (older than ~6 months) and your run confirmed the same issue or evolved the mitigation. If nothing new was learned, do nothing — skip the entire write step.
+2. **Conditional learnings write** — only if there's something *new* to record. Re-read `~/.claude/memory/E2E/<projectDir>/learnings.md` and compare against what you'd write. Skip if a near-duplicate exists. Update an existing entry in place (rewriting its mitigation to current best advice) if the existing entry is stale (older than ~6 months) and your run confirmed the same issue or evolved the mitigation. If nothing new was learned, do nothing — skip the entire write step.
 
    When a write IS warranted, use the Write tool with the full file contents (existing + new entry, OR existing with in-place update). Entry format:
    ```
@@ -300,11 +312,11 @@ Stop the loop when verify passes (→ Step 8) OR after 5 iterations (→ Step 9)
    ```
 
 3. **Write the durable QA pass report (ALL modes).** This runs in Mode 1, Mode 2, AND Mode 3 — the operator always gets an offline archive of what the test proved.
-   1. `mkdir -p /Users/fabianodesouza/.claude/memory/ticket-reports/<TICKET>/qa-reports` (standalone Bash).
+   1. `mkdir -p ~/.claude/memory/ticket-reports/<TICKET>/qa-reports` (standalone Bash).
    2. Compose a timestamp: run `date +%Y%m%dT%H%M%S` (standalone Bash). Capture as `TIMESTAMP`.
    3. Build the report path. **Filename differs by mode:**
-      - Mode 1 (Standalone) and Mode 2 (Embedded): `REPORT_PATH = /Users/fabianodesouza/.claude/memory/ticket-reports/<TICKET>/qa-reports/<TICKET>-QA-PASSED-<TIMESTAMP>.md`
-      - Mode 3 (Live QA): `REPORT_PATH = /Users/fabianodesouza/.claude/memory/ticket-reports/<TICKET>/qa-reports/<TICKET>-LIVE-QA-PASSED-<TIMESTAMP>.md`
+      - Mode 1 (Standalone) and Mode 2 (Embedded): `REPORT_PATH = ~/.claude/memory/ticket-reports/<TICKET>/qa-reports/<TICKET>-QA-PASSED-<TIMESTAMP>.md`
+      - Mode 3 (Live QA): `REPORT_PATH = ~/.claude/memory/ticket-reports/<TICKET>/qa-reports/<TICKET>-LIVE-QA-PASSED-<TIMESTAMP>.md`
    4. Write the report using the **QA Pass report template** (below). Use the Write tool, never shell redirection. The mode-specific fields (Mode line, title, deploy command, footer) adjust per the substitution table inside the template, but the section structure is identical across all three modes.
 
 4. **Mode 3 only — post a stripped-down QA Pass comment to the Jira ticket.** Skip in Modes 1 and 2 (Mode 2's full comment is posted by `ticket-driver` itself with PR/branch/code-review context; Standalone Mode 1 does not auto-post — the operator decides what to do with the results).

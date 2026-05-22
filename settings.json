@@ -39,6 +39,7 @@
       "Bash(npx firebase:*)",
       "Bash(firebase deploy:*)",
       "Bash(firebase emulators:start:*)",
+      "Bash(gcloud functions describe:*)",
       "Bash(playwright-cli:*)",
       "Bash(playwright-cli eval *)",
       "Bash(playwright-cli eval:*)",

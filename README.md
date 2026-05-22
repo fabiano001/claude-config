@@ -229,18 +229,42 @@ Agents are specialized autonomous processors that handle complex, multi-step tas
 **Usage:**
 ```
 /jira-sprint-manager
+/jira-sprint-manager autonomous
 ```
 
 **What it does:**
-- Fetches every ticket in the active sprint assigned to the operator (Fabiano Desouza), sorted right-to-left by board column
-- Runs four auto-action rules per invocation:
-  - **Rule A** — Transitions the top-of-New ticket to `In Progress` when nothing is currently in progress
+- Fetches every ticket in the active sprint assigned to the operator (Fabiano Desouza), sorted by board priority within each status
+- Runs six auto-action rules per invocation:
+  - **Rule A** — Kickoff: transitions the top-of-New ticket to `In Progress` when nothing is currently in progress (skips blocked/impediment-flagged tickets)
   - **Rule B** — Live-ticket follow-up: Live QA pre-check, reminders, and close prompts
-  - **Rule C** — `PROD READY` tickets: merge-to-main driven prod deploys with templated Jira comment
-  - **Rule D** — In Progress tickets: spawns a worktree + fresh Claude session via `open-claude-session.sh` for implementation or research kickoff
+  - **Rule C** — `PROD READY` deploys: merge-to-main driven prod deploys with templated Jira comment
+  - **Rule D** — In Progress worktree kickoff: spawns a worktree + fresh Claude session via `open-claude-session.sh` for implementation or research
+  - **Rule E** — Testing-lane QA verification: confirms QA pass and transitions to `Under Review`
+  - **Rule F** — Under-Review PR approval: auto-transitions to `PROD READY` or `Stakeholder Review` once all PRs are approved
+- **Autonomous mode** (`/jira-sprint-manager autonomous`) — runs ONLY lane-moving rules that never queue questions (Rule A + Rule F). Designed for scheduled/cron-driven runs; writes no report file on a quiet day
 - Writes a dated markdown report to `~/.claude/memory/jira-sprint-manager/<MM-DD-YY>.md` (never overwrites — appends `-v2`, `-v3`, … suffixes)
 - Designed for daily scheduled execution but also runs on demand
 - Does NOT execute `/ticket-driver` or `/ticket-creator` directly — it spawns those in fresh Claude sessions
+
+---
+
+#### `/fix-prod-submission-error`
+**Purpose:** End-to-end recovery for a Trident Firestore loan that failed to submit to Salesforce
+
+**Usage:**
+```
+/fix-prod-submission-error <loan-id>
+/fix-prod-submission-error <loan-id> interactive
+```
+
+**What it does:**
+- Takes one required parameter (the Firestore loan id, e.g. `lendapi-d678e292-…` for LendAPI or a 20-char alphanumeric for the internal funnel) and an optional `interactive` flag (default mode is `auto`)
+- Finds the failure email in Gmail and classifies the Salesforce error from the composite-response envelope
+- Applies an error-specific data fix in the `trident-funding` production Firestore
+- Drives the admin UI to click Resubmit
+- Verifies success via GCP function logs
+- Outputs a copy-paste Slack status message and appends a structured JSON record to the durable run log
+- In `interactive` mode, prompts the operator for unknown error classes; in `auto` mode it stops and logs rather than guessing
 
 ---
 
@@ -360,7 +384,7 @@ ls ~/.claude/skills/
 1. Open **any project** in VS Code or Cursor
 2. Start Claude Code
 3. Type `/` to see available skills
-4. You should see `/ticket-driver`, `/bug-killer`, `/code-optimizer`, `/ticket-creator`, `/deep-dive-creator`, `/e2e-test-jira-ticket`, `/research`, `/bq-analyst`, and `/jira-sprint-manager`
+4. You should see `/ticket-driver`, `/bug-killer`, `/code-optimizer`, `/ticket-creator`, `/deep-dive-creator`, `/e2e-test-jira-ticket`, `/research`, `/bq-analyst`, `/jira-sprint-manager`, and `/fix-prod-submission-error`
 
 ### Alternative: Project-Specific Installation
 
@@ -404,6 +428,7 @@ claude-code-commands/
 │   ├── research/                # Codebase research + memory-backed write-ups
 │   ├── bq-analyst/              # BigQuery analytics for Trident loans
 │   ├── jira-sprint-manager/     # Daily sprint status report + auto-actions
+│   ├── fix-prod-submission-error/ # Salesforce submission failure recovery
 │   ├── playwright-cli/
 │   ├── e2e-debug-finance-funnel/
 │   ├── codex-review/
