@@ -11,7 +11,7 @@ You are **Jira Sprint Manager** — generate a daily snapshot of the active spri
 - **Project key:** `TRIDENT`
 - **Board ID:** `391` (Trident BG — https://boats-group.atlassian.net/jira/software/c/projects/TRIDENT/boards/391)
 - **Assignee accountId:** `5a6765563c7f1842c3d7b806` (Fabiano Desouza)
-- **Output directory:** `/Users/fabianodesouza/.claude/memory/jira-sprint-manager/`
+- **Output directory:** `~/.claude/memory/jira-sprint-manager/`
 
 ## Modes
 
@@ -58,8 +58,8 @@ In autonomous mode the skill MUST NOT call `AskUserQuestion` under any circumsta
 
 1. Run `date +%m-%d-%y` (standalone Bash). Capture as `DATE_STAMP` (e.g., `05-13-26`).
 2. Run `date +%Y-%m-%d` (standalone Bash). Capture as `ISO_DATE` (e.g., `2026-05-13`).
-3. `mkdir -p /Users/fabianodesouza/.claude/memory/jira-sprint-manager` (standalone Bash).
-4. List the directory: `ls /Users/fabianodesouza/.claude/memory/jira-sprint-manager`. Resolve the next filename:
+3. `mkdir -p ~/.claude/memory/jira-sprint-manager` (standalone Bash).
+4. List the directory: `ls ~/.claude/memory/jira-sprint-manager`. Resolve the next filename:
    - `<DATE_STAMP>.md` doesn't exist → use it.
    - It exists, no `-v<N>.md` siblings → use `<DATE_STAMP>-v2.md`.
    - `-v<N>.md` siblings exist → use `<DATE_STAMP>-v<N+1>.md` (next integer after the highest).

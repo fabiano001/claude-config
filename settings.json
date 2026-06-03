@@ -39,7 +39,11 @@
       "Bash(npx firebase:*)",
       "Bash(firebase deploy:*)",
       "Bash(firebase emulators:start:*)",
+      "Bash(date:*)",
       "Bash(gcloud functions describe:*)",
+      "Bash(gcloud logging read --project=trident-funding:*)",
+      "Bash(GCLOUD_PROJECT=trident-funding node temp/check-loan-readonly.js:*)",
+      "Bash(GCLOUD_PROJECT=trident-funding node scripts/apply-known-fix.js:*)",
       "Bash(playwright-cli:*)",
       "Bash(playwright-cli eval *)",
       "Bash(playwright-cli eval:*)",
@@ -136,7 +140,7 @@
     "enabled": true,
     "mode": "hold"
   },
+  "agentPushNotifEnabled": true,
   "skipAutoPermissionPrompt": true,
-  "voiceEnabled": true,
-  "agentPushNotifEnabled": true
+  "voiceEnabled": true
 }

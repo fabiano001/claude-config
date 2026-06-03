@@ -108,7 +108,7 @@ Create a markdown file following the template in [references/report-template.md]
 - Extract the ticket number from the PR title (e.g., `TRIDENT-825`)
 - Iteration starts at `1`. If `{TICKET}-PR-REVIEW-1.md` exists in the save directory, use `2`, and so on
 - If no ticket number is found, use the PR number: `PR-{number}-REVIEW-{ITERATION}.md`
-- **Save directly to** `/Users/fabianodesouza/.claude/memory/ticket-reports/{TICKET-NUMBER}/pr-review/` (create the directory with `mkdir -p` if it doesn't exist). This is durable storage that survives worktree cleanup and lives outside any project tree — no stash step is needed because the file is never written into the working tree in the first place.
+- **Save directly to** `~/.claude/memory/ticket-reports/{TICKET-NUMBER}/pr-review/` (create the directory with `mkdir -p` if it doesn't exist). This is durable storage that survives worktree cleanup and lives outside any project tree — no stash step is needed because the file is never written into the working tree in the first place.
 
 ### Step 7: Present results and offer fixes
 
@@ -151,7 +151,7 @@ If `WAIT` is NOT present, skip this step entirely.
 
 ### Steps 1–6: Fetch, categorize, research, report
 
-Run **Steps 1–6** (parse URL, fetch metadata, fetch threads, categorize, research, **generate and save the report directly to `/Users/fabianodesouza/.claude/memory/ticket-reports/{TICKET-NUMBER}/pr-review/`**). Then, instead of Steps 7–8, execute the following loop. **CRITICAL: You MUST execute all steps A → B → C → D in sequence. Do NOT stop after committing and pushing — you MUST continue to the poll loop (Auto Step C).**
+Run **Steps 1–6** (parse URL, fetch metadata, fetch threads, categorize, research, **generate and save the report directly to `~/.claude/memory/ticket-reports/{TICKET-NUMBER}/pr-review/`**). Then, instead of Steps 7–8, execute the following loop. **CRITICAL: You MUST execute all steps A → B → C → D in sequence. Do NOT stop after committing and pushing — you MUST continue to the poll loop (Auto Step C).**
 
 ### Auto Step A: Fix all "Real issue / Fix" items
 
@@ -203,13 +203,13 @@ Run **Steps 1–6** (parse URL, fetch metadata, fetch threads, categorize, resea
 
 ### Auto Step D: Print final summary
 
-When the autonomous loop ends (no more fixable issues or max iterations reached), all report files are already saved durably at `/Users/fabianodesouza/.claude/memory/ticket-reports/{TICKET-NUMBER}/pr-review/` — there is no working tree to clean up because reports were never written inside the project tree.
+When the autonomous loop ends (no more fixable issues or max iterations reached), all report files are already saved durably at `~/.claude/memory/ticket-reports/{TICKET-NUMBER}/pr-review/` — there is no working tree to clean up because reports were never written inside the project tree.
 
 1. Print a summary listing each saved report path (one per iteration), e.g.:
    ```
    Saved {N} report(s):
-   - /Users/fabianodesouza/.claude/memory/ticket-reports/{TICKET-NUMBER}/pr-review/{TICKET-NUMBER}-PR-REVIEW-1.md
-   - /Users/fabianodesouza/.claude/memory/ticket-reports/{TICKET-NUMBER}/pr-review/{TICKET-NUMBER}-PR-REVIEW-2.md
+   - ~/.claude/memory/ticket-reports/{TICKET-NUMBER}/pr-review/{TICKET-NUMBER}-PR-REVIEW-1.md
+   - ~/.claude/memory/ticket-reports/{TICKET-NUMBER}/pr-review/{TICKET-NUMBER}-PR-REVIEW-2.md
    ```
 2. Do NOT git stash, git add, or git commit the report files — they live outside the project tree by design.
 

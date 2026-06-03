@@ -27,7 +27,7 @@ The operator MUST explicitly approve the plan via the 3-option question below be
 
 2. **Determine the target repo.** Same logic as Rule D step 4 — scan the deployment notes (and `description` + `summary` as a fallback) for known repo names from the priority list; default to `webapp-react-trident`. The merge happens on this repo's main branch.
 
-   Repo path: `/Users/fabianodesouza/BOATS-GROUP-PROJECTS-GITHUB/<repo>`. If it doesn't exist on disk, append to `actionsTaken`: `"Deploy skipped — repo <repo> not found at <path>"` and skip.
+   Repo path: `~/BOATS-GROUP-PROJECTS-GITHUB/<repo>`. If it doesn't exist on disk, append to `actionsTaken`: `"Deploy skipped — repo <repo> not found at <path>"` and skip.
 
 3. **Parse the deployment notes and build the plan.** Read deployment notes line by line; the standard boats-group pattern (also emitted by the `ticket-creator` skill) is:
 
@@ -121,7 +121,7 @@ Repo-side branch protection allows the merge, but the operator's policy is to cl
    - `session id: <uuid>` → `IMPL_SESSION_ID`
    - `repo/dir: <basename>` → `IMPL_REPO_DIR`
 
-   The repo/dir is a basename (e.g., `webapp-react-trident-worktree-2`); compute the absolute path as `/Users/fabianodesouza/BOATS-GROUP-PROJECTS-GITHUB/<IMPL_REPO_DIR>`.
+   The repo/dir is a basename (e.g., `webapp-react-trident-worktree-2`); compute the absolute path as `~/BOATS-GROUP-PROJECTS-GITHUB/<IMPL_REPO_DIR>`.
 
    **No-session fallback:** if either (a) the ticket heading doesn't exist in sessions.md, (b) the section has no `## ticket-driver` subentry, or (c) the resolved absolute path doesn't exist on disk (`test -d` fails), then SKIP the auto-resume and:
    - Append to `actionsTaken`: `"Merge skipped — PR #<N> has <UNRESOLVED_COUNT> unresolved review comments; no prior ticket-driver session found in sessions.md. Please run /review-pr-comments <PR URL> autonomous manually."`.
@@ -130,8 +130,8 @@ Repo-side branch protection allows the merge, but the operator's policy is to cl
 
 3. **Open a new Claude session resuming the implementation session** via the helper script:
    ```
-   /Users/fabianodesouza/.claude/skills/jira-sprint-manager/open-claude-session.sh \
-     /Users/fabianodesouza/BOATS-GROUP-PROJECTS-GITHUB/<IMPL_REPO_DIR> \
+   ~/.claude/skills/jira-sprint-manager/open-claude-session.sh \
+     ~/BOATS-GROUP-PROJECTS-GITHUB/<IMPL_REPO_DIR> \
      --resume <IMPL_SESSION_ID> \
      --prompt "/review-pr-comments <PR URL> autonomous"
    ```

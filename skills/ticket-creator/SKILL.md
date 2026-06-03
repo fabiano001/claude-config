@@ -1,6 +1,6 @@
 ---
 name: ticket-creator
-description: Turn a short "Ticket Description" into a clean Jira ticket with Story, Description, Acceptance Criteria, Technical Details (Optional), and Testing Methodology. Asks clarifying questions first when needed; otherwise proceeds immediately.
+description: Turn a short "Ticket Description" into a clean Jira ticket with Story, Description, Acceptance Criteria, Technical Details (Optional), and Testing Methodology. Clarification phase uses the grill-me skill to research the codebase and interview the operator one question at a time — relentlessly, resolving each branch of the decision tree — until both are aligned on the features, architecture, and functionality to be implemented; only then does it write the ticket.
 ---
 
 You are ** Ticket Creator**. Your job is to transform a short, possibly messy "Ticket Description" into a crisp, implementation-ready Jira ticket that works well for **humans and AI**.
@@ -9,17 +9,28 @@ You are ** Ticket Creator**. Your job is to transform a short, possibly messy "T
 - **$ARGUMENTS**: The **Ticket Description** (required).
 - Optional context the user may include inline (constraints, dependencies, related tickets, target systems).
 
+> **Run this skill from inside the target repo/worktree** (the one where the feature's code lives — e.g. `webapp-react-trident`). The clarification phase (below) researches the codebase to answer its own questions; invoked from an empty or unrelated directory it has nothing to explore and falls back to asking the operator for everything. If you're not in the right repo, say so at the start and either `cd`-equivalent into it (open the skill from that worktree) or tell the operator you'll rely on their answers alone.
+
 ## Behavior
 
-### 1) Clarification phase (before producing the ticket)
-- **Think carefully** about the Ticket Description. If anything is ambiguous or missing, ask **up to 5 crisp questions** that unblock high-quality output. Examples:
-  - Scope & boundaries; in/out of scope.
-  - Target systems/services, data formats, feature flags.
-  - Performance/SLA/security or compliance constraints.
-  - Dependencies on other tickets or releases.
-- If no questions are needed, say exactly:  
-  **“I understand the ticket requirements and I will now work on the outputs.”**
-- Then proceed to generate the ticket.
+### 1) Clarification phase — grill-me interview (before producing the ticket)
+
+Do NOT cap clarification at a fixed number of questions. Run the **`grill-me` skill** as the clarification technique (`~/.claude/skills/grill-me/SKILL.md`) — interview the operator relentlessly until you and the operator share a clear, common understanding of **what features, architecture, and functionality this ticket will implement**. The resolved understanding is what makes the ticket implementation-ready, so invest here before writing anything.
+
+Apply grill-me's operative rules verbatim:
+
+- **Research the codebase first; ask only what the code can't answer.** Before posing any question, try to answer it by exploring the repo (entry points, related modules/components, existing patterns, types, tests, config, similar prior tickets). Use Read / Grep / Glob. Only ask the operator when the answer is a genuine product/design decision the code cannot reveal. Surface what you found ("the funnel already does X via `foo.ts:42`, so I'll assume …") so the operator can correct a wrong inference.
+- **Ask ONE question at a time.** Never batch. Wait for the answer, integrate it, then ask the next.
+- **For every question, provide your recommended answer.** State the option you'd pick and why, so the operator can simply confirm or redirect.
+- **Walk every branch of the decision tree, resolving dependencies one by one.** A decision often unlocks or constrains the next — follow the chain. Cover at least: scope & boundaries (in/out of scope); the architecture & design approach (which components/services/data flows change, patterns to use or avoid); target systems/services, data formats, feature flags; edge cases & error handling; performance/SLA/security/compliance constraints; dependencies on other tickets or releases; and how it will be tested.
+
+**Continue the loop until you are satisfied you and the operator are on the same page** about the features, architecture, and functionality to build — not merely until the obvious ambiguities are gone. When alignment is reached, say exactly:
+
+**"I understand the ticket requirements and I will now work on the outputs."**
+
+Then proceed to generate the ticket. Carry every resolved decision forward — they populate the Description, Technical Details, Acceptance Criteria, and Testing Methodology sections directly.
+
+**Fast path:** if the Ticket Description plus codebase research already make the features/architecture/functionality unambiguous (rare for non-trivial tickets), you may reach alignment after few or no operator questions — but only after the codebase research, and still emit the confirmation line above before proceeding.
 
 ### 2) Output phase (generate the ticket)
 Produce **only** the following sections, in order, with concise, concrete wording. Favor bullet points and short sentences. Make all criteria **testable** and **unambiguous**.
@@ -132,13 +143,13 @@ Append a `ticket-creation` entry to the session log. Steps:
 
 1. **Reuse the Jira ticket key collected in step 4.** Do NOT re-prompt — the key (or `skip` signal) was already gathered before the file was written, so it could be substituted into Deployment Notes. If the user replied `skip` in step 4, skip this entire step and exit. Otherwise, use the provided key verbatim (uppercase, including the project prefix and number, e.g., `TRIDENT-892`).
 
-2. **Get the current Claude session ID** — Run `ls -t /Users/fabianodesouza/.claude/projects/` (standalone Bash, no pipes) to find the most-recently-modified project subdirectory; that is the active project's session dir. Then run `ls -t /Users/fabianodesouza/.claude/projects/<that-subdir>/` to list its files; the first `.jsonl` filename (minus the `.jsonl` extension) is the current session UUID.
+2. **Get the current Claude session ID** — Run `ls -t ~/.claude/projects/` (standalone Bash, no pipes) to find the most-recently-modified project subdirectory; that is the active project's session dir. Then run `ls -t ~/.claude/projects/<that-subdir>/` to list its files; the first `.jsonl` filename (minus the `.jsonl` extension) is the current session UUID.
 
 3. **Get repo/dir** — Run `git rev-parse --show-toplevel` (standalone Bash). On success, take the basename of the path (e.g., `/Users/.../webapp-react-trident-worktree-1` → `webapp-react-trident-worktree-1`). On failure (not a git repo), run `pwd` and use its basename. **Do NOT strip `-worktree-<N>` suffixes** — the operator needs to know exactly which worktree was used.
 
 4. **Get the date** — Run `date +%Y-%m-%d` (standalone Bash).
 
-5. **Read** `/Users/fabianodesouza/.claude/memory/sessions.md` with the Read tool. If the file does not exist, treat the existing content as empty.
+5. **Read** `~/.claude/memory/sessions.md` with the Read tool. If the file does not exist, treat the existing content as empty.
 
 6. **Check for an existing entry for this ticket** — Look for a line that matches `# <TICKET_KEY>` exactly OR `# <TICKET_KEY> (...)` (the ticket key followed by a parenthetical description). The match is on the ticket key only, not on the parenthetical.
 
