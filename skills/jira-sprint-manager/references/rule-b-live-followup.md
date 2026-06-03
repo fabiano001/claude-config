@@ -49,7 +49,7 @@ Rule B is ALSO invoked via the **Rule C → Rule B back-edge chain** on any tick
         - `session id: <uuid>` → `IMPL_SESSION_ID`
         - `repo/dir: <basename>` → `IMPL_REPO_DIR`
 
-        Compute the absolute path as `/Users/fabianodesouza/BOATS-GROUP-PROJECTS-GITHUB/<IMPL_REPO_DIR>`.
+        Compute the absolute path as `~/BOATS-GROUP-PROJECTS-GITHUB/<IMPL_REPO_DIR>`.
 
         **No-session fallback:** if either (a) the ticket heading doesn't exist in sessions.md, (b) the section has no `## ticket-driver` subentry, or (c) the resolved absolute path doesn't exist on disk (`test -d` fails), SKIP the resume and:
         - Append to `actionsTaken`: `"Live QA kickoff skipped — no prior ticket-driver session found in sessions.md. Please run /e2e-test-jira-ticket <TICKET-KEY> --live-qa manually."`.
@@ -58,8 +58,8 @@ Rule B is ALSO invoked via the **Rule C → Rule B back-edge chain** on any tick
 
      3. **Open a new Claude session resuming the implementation session** via the helper script:
         ```
-        /Users/fabianodesouza/.claude/skills/jira-sprint-manager/open-claude-session.sh \
-          /Users/fabianodesouza/BOATS-GROUP-PROJECTS-GITHUB/<IMPL_REPO_DIR> \
+        ~/.claude/skills/jira-sprint-manager/open-claude-session.sh \
+          ~/BOATS-GROUP-PROJECTS-GITHUB/<IMPL_REPO_DIR> \
           --resume <IMPL_SESSION_ID> \
           --prompt "/e2e-test-jira-ticket <TICKET-KEY> --live-qa"
         ```

@@ -40,18 +40,18 @@ The response contains at least ONE ticket whose `fields.status.name == "In Progr
 
    The repo's main-repo absolute path is:
    ```
-   /Users/fabianodesouza/BOATS-GROUP-PROJECTS-GITHUB/<repo>
+   ~/BOATS-GROUP-PROJECTS-GITHUB/<repo>
    ```
    (Confirmed via `ls ~/BOATS-GROUP-PROJECTS-GITHUB/` — every repo in the list above lives at that path on this workstation.) If the resolved path does not exist, append to `actionsTaken`: `"Implementation kickoff skipped — repo <repo> not found at <path>"` and move on.
 
 5. **Compute both per-ticket worktree paths** (both branches in step 6 need these — the impl path is used when the marker was found, the research path when it wasn't):
    ```
-   IMPL_PATH     = /Users/fabianodesouza/BOATS-GROUP-PROJECTS-GITHUB/<repo>-<TICKET-KEY>
-   RESEARCH_PATH = /Users/fabianodesouza/BOATS-GROUP-PROJECTS-GITHUB/<repo>-<TICKET-KEY>-research
+   IMPL_PATH     = ~/BOATS-GROUP-PROJECTS-GITHUB/<repo>-<TICKET-KEY>
+   RESEARCH_PATH = ~/BOATS-GROUP-PROJECTS-GITHUB/<repo>-<TICKET-KEY>-research
    ```
    Examples for `TRIDENT-904` (`webapp-react-trident`):
-   - `IMPL_PATH = /Users/fabianodesouza/BOATS-GROUP-PROJECTS-GITHUB/webapp-react-trident-TRIDENT-904`
-   - `RESEARCH_PATH = /Users/fabianodesouza/BOATS-GROUP-PROJECTS-GITHUB/webapp-react-trident-TRIDENT-904-research`
+   - `IMPL_PATH = ~/BOATS-GROUP-PROJECTS-GITHUB/webapp-react-trident-TRIDENT-904`
+   - `RESEARCH_PATH = ~/BOATS-GROUP-PROJECTS-GITHUB/webapp-react-trident-TRIDENT-904-research`
 
    (Note: both naming conventions are distinct from the legacy `<repo>-worktree-<N>` numbered worktrees and the shared `<repo>-worktree-research` scratch worktree. The per-ticket worktrees are dedicated to one ticket each, with separate branches for the research vs. implementation phases.)
 
@@ -87,9 +87,9 @@ The response contains at least ONE ticket whose `fields.status.name == "In Progr
 
    If the `worktree add` command fails for any reason (refs in use, permission denied, conflicting path), append to `actionsTaken`: `"Implementation kickoff skipped — worktree creation failed: <verbatim error>"` and stop the rule for this ticket. Print one terminal warning line.
 
-3. **Open a new Claude session in the worktree** via the helper script at `/Users/fabianodesouza/.claude/skills/jira-sprint-manager/open-claude-session.sh`:
+3. **Open a new Claude session in the worktree** via the helper script at `~/.claude/skills/jira-sprint-manager/open-claude-session.sh`:
    ```
-   /Users/fabianodesouza/.claude/skills/jira-sprint-manager/open-claude-session.sh \
+   ~/.claude/skills/jira-sprint-manager/open-claude-session.sh \
      <IMPL_PATH> \
      --prompt "/ticket-driver <TICKET-KEY>"
    ```
@@ -190,7 +190,7 @@ The research worktree uses a **separate branch** named `<TICKET-KEY>-research` s
 
 3. **Open a new Claude session in the research worktree** via the helper script:
    ```
-   /Users/fabianodesouza/.claude/skills/jira-sprint-manager/open-claude-session.sh \
+   ~/.claude/skills/jira-sprint-manager/open-claude-session.sh \
      <RESEARCH_PATH> \
      --prompt "/ticket-creator"
    ```

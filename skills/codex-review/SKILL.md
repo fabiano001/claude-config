@@ -129,7 +129,7 @@ Create a markdown file following the template in [references/report-template.md]
 - Use the ticket number extracted from the PR title in Step 1 (e.g., `TRIDENT-822`)
 - Iteration starts at `1`. If `{TICKET}-CODEX-REVIEW-1.md` exists in the save directory, use `2`, and so on
 - If no ticket number is found, use the PR number: `PR-{number}-CODEX-REVIEW-{ITERATION}.md`
-- **Save directly to** `/Users/fabianodesouza/.claude/memory/ticket-reports/{TICKET-NUMBER}/codex-review/` (create the directory with `mkdir -p` if it doesn't exist). This is durable storage that survives worktree cleanup and lives outside any project tree — no stash step is needed because the file is never written into the working tree in the first place.
+- **Save directly to** `~/.claude/memory/ticket-reports/{TICKET-NUMBER}/codex-review/` (create the directory with `mkdir -p` if it doesn't exist). This is durable storage that survives worktree cleanup and lives outside any project tree — no stash step is needed because the file is never written into the working tree in the first place.
 
 ### Step 6: Present results and offer fixes (Interactive mode)
 
@@ -153,11 +153,11 @@ When the user requests fixes:
 
 ### Step 8: Confirm report saved
 
-After fixes are applied (or if no fixes requested), the report is already saved durably at `/Users/fabianodesouza/.claude/memory/ticket-reports/{TICKET-NUMBER}/codex-review/{TICKET-NUMBER}-CODEX-REVIEW-{ITERATION}.md` from Step 5 — there is nothing to stash because the file was never written inside the project tree. Print one line confirming the saved path. Do NOT run `git add`, `git stash`, or `git commit` against the report file.
+After fixes are applied (or if no fixes requested), the report is already saved durably at `~/.claude/memory/ticket-reports/{TICKET-NUMBER}/codex-review/{TICKET-NUMBER}-CODEX-REVIEW-{ITERATION}.md` from Step 5 — there is nothing to stash because the file was never written inside the project tree. Print one line confirming the saved path. Do NOT run `git add`, `git stash`, or `git commit` against the report file.
 
 ## Autonomous Mode
 
-When the user triggers autonomous mode, run **Steps 1–5 first** (parse PR URL, run Codex via `/codex-peer-review --base {baseRefName}`, parse findings, research, **generate and save the report directly to `/Users/fabianodesouza/.claude/memory/ticket-reports/{TICKET-NUMBER}/codex-review/`**). Then, instead of Steps 6–7, execute the following:
+When the user triggers autonomous mode, run **Steps 1–5 first** (parse PR URL, run Codex via `/codex-peer-review --base {baseRefName}`, parse findings, research, **generate and save the report directly to `~/.claude/memory/ticket-reports/{TICKET-NUMBER}/codex-review/`**). Then, instead of Steps 6–7, execute the following:
 
 ### Auto Step A: Fix all "Real issue / Fix" items
 
@@ -185,7 +185,7 @@ When the user triggers autonomous mode, run **Steps 1–5 first** (parse PR URL,
 
 ### Auto Step C: Print final summary
 
-The report is already saved durably at `/Users/fabianodesouza/.claude/memory/ticket-reports/{TICKET-NUMBER}/codex-review/{TICKET-NUMBER}-CODEX-REVIEW-{ITERATION}.md` — no stash step is needed.
+The report is already saved durably at `~/.claude/memory/ticket-reports/{TICKET-NUMBER}/codex-review/{TICKET-NUMBER}-CODEX-REVIEW-{ITERATION}.md` — no stash step is needed.
 
 1. Print the saved report path on its own line.
 2. Print a summary of all findings and fixes applied.
