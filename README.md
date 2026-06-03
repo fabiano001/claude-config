@@ -308,7 +308,7 @@ Researches frameworks, libraries, APIs, tools, and technical concepts. Synthesiz
 | **skill-authoring** | Best practices for creating Claude Code skills, MCP tools, and AI agent capabilities |
 | **find-skills** | Discover and install skills from the open agent skills ecosystem |
 | **fix-claude-installation** | Fix broken Claude Code CLI installation caused by failed auto-updates |
-| **grill-me** | Interview the user relentlessly about a plan or design until shared understanding is reached (used by `ticket-creator` during clarification) |
+| **grill-me** | Interview the user relentlessly about a plan or design until shared understanding is reached (used by `ticket-creator` during clarification). From [Matt Pocock's skills repo](https://github.com/mattpocock/skills) |
 
 ## Plugins
 

@@ -8,7 +8,7 @@
 - **fetch-jira-acceptance-criteria** — Fetches acceptance criteria from a Jira ticket's custom field
 - **fetch-jira-qa-notes** — Fetches QA notes from a Jira ticket's custom field
 - **fix-claude-installation** — Fixes broken Claude Code CLI after failed auto-updates
-- **grill-me** — Interviews the user relentlessly about a plan/design until shared understanding is reached (used by `ticket-creator`)
+- **grill-me** — Interviews the user relentlessly about a plan/design until shared understanding is reached (used by `ticket-creator`). From [Matt Pocock's skills repo](https://github.com/mattpocock/skills)
 - **review-pr-comments** — Fetches PR review threads via GraphQL, researches unresolved comments, generates report, optionally auto-fixes
 - **find-skills** — Helps discover and install agent skills from the marketplace
 - **playwright-cli** — Browser automation reference — commands for navigating, clicking, filling, screenshots
