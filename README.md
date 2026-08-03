@@ -60,6 +60,10 @@ Agents are specialized autonomous processors that handle complex, multi-step tas
 | Standard | Plan interactively, then dispatch autonomous execution via Agent subagent |
 | `USE-CURRENT-BRANCH` | Same as standard but stays on current branch, skips branch setup |
 | `PLAN-MODE` | Creates `plan.md` and `context.md` for SprintLoop — no git ops, no execution |
+| `TODO-MODE` | For a ticket still in the TODO column — runs the full implementation, E2E test, and hour-logging, but does NOT transition the ticket to "Ready for QA", so the work is ready the moment it's actually picked up |
+| ARTIFACT (auto-detected) | Sources ticket fields (Story/Description/AC/etc.) from a `Ticket Driver Artifact: <URL>` Jira comment instead of the ticket's own fields, for tickets a PO owns and won't let you edit |
+
+**Marker comments:** Posts `Ticket Driver Implementation Started (<repo>): <timestamp>` right before execution and `Ticket Driver Implementation Completed (<repo>): <timestamp>` when finalized, scoped per repo. Every invocation refuses to run if either marker already exists for its own repo, preventing duplicate concurrent runs on the same ticket+repo.
 
 **PLAN-MODE** generates two files under `~/RalphLoops/SprintLoop/Sprints/<SPRINT_NAME>/<TICKET_NAME>/`:
 - `plan.md` — Flat checklist of actionable tasks for the SprintLoop executor
@@ -138,14 +142,16 @@ Agents are specialized autonomous processors that handle complex, multi-step tas
 ```
 
 **What it does:**
-- Asks clarifying questions when needed
+- Clarification phase uses the `grill-me` skill to research the codebase and interview the operator one question at a time — relentlessly, resolving each branch of the decision tree — before writing anything
 - Generates complete Jira ticket with:
   - User Story (in Trident team format)
   - Description
   - Acceptance Criteria
   - Technical Details (optional)
   - Testing Methodology
-- Interactive refinement loop
+- **NORMAL mode (default):** clones the TRIDENT-425 template ticket to obtain a real Jira key, writes each generated section into its correct Jira field, and posts Repos Involved / Implementation Ready marker comments
+- **ARTIFACT mode:** targets an existing ticket key without writing to any field — publishes an Artifact with the generated sections and posts a `Ticket Driver Artifact: <URL>` comment so a later `/ticket-driver` run auto-detects it
+- Logs the ticket-creation session to `~/.claude/memory/sessions.md`
 
 **Example workflow:**
 ```
@@ -180,12 +186,15 @@ Agents are specialized autonomous processors that handle complex, multi-step tas
 ```
 /e2e-test-jira-ticket <TICKET_KEY>
 /e2e-test-jira-ticket <TICKET_KEY> --plan-confirmed
+/e2e-test-jira-ticket <TICKET_KEY> --live-qa
 ```
 
 **What it does:**
 - Deploys the change to stage, drives the funnel through `playwright-cli`, verifies the pass/fail rule, and captures evidence
-- **Mode 1 (standalone):** Proposes a 3-item plan and asks the operator to confirm before execution
-- **Mode 2 (embedded):** `--plan-confirmed` skips the confirmation dialog — used internally by `/ticket-driver`
+- **Standalone:** Proposes a plan (URL/deploy/verify) and asks the operator to confirm before execution
+- **Embedded:** caller supplies confirmed values, skipping the confirmation dialog — used internally by `/ticket-driver`
+- **Live QA** (`--live-qa`): tests whatever is already deployed with no deploy step, and posts a QA Pass Jira comment on success
+- Production deployment is forbidden in all modes
 
 ---
 
@@ -235,16 +244,143 @@ Agents are specialized autonomous processors that handle complex, multi-step tas
 **What it does:**
 - Fetches every ticket in the active sprint assigned to the operator (Fabiano Desouza), sorted by board priority within each status
 - Runs six auto-action rules per invocation:
-  - **Rule A** — Kickoff: transitions the top-of-New ticket to `In Progress` when nothing is currently in progress (skips blocked/impediment-flagged tickets)
+  - **Rule A** — Kickoff: prioritizes a TO DO ticket whose implementation was already started/completed via `ticket-driver TODO-MODE`, else the top of the New lane; skips blocked/impediment-flagged tickets and never asks the operator anything
   - **Rule B** — Live-ticket follow-up: Live QA pre-check, reminders, and close prompts
   - **Rule C** — `PROD READY` deploys: merge-to-main driven prod deploys with templated Jira comment
   - **Rule D** — In Progress worktree kickoff: spawns a worktree + fresh Claude session via `open-claude-session.sh` for implementation or research
   - **Rule E** — Testing-lane QA verification: confirms QA pass and transitions to `Under Review`
   - **Rule F** — Under-Review PR approval: auto-transitions to `PROD READY` or `Stakeholder Review` once all PRs are approved
 - **Autonomous mode** (`/jira-sprint-manager autonomous`) — runs ONLY lane-moving rules that never queue questions (Rule A + Rule F). Designed for scheduled/cron-driven runs; writes no report file on a quiet day
+- Whenever it queues an operator question in interactive mode, also posts a Slack message to `#fabi-jira-sprint-manager` before blocking, so the operator isn't just waiting on an unwatched terminal
+- Safe to run on a recurring loop: checks a run-lock file before doing anything and exits immediately with no report if a prior invocation is still active (including one sitting idle on an unanswered queued question)
 - Writes a dated markdown report to `~/.claude/memory/jira-sprint-manager/<MM-DD-YY>.md` (never overwrites — appends `-v2`, `-v3`, … suffixes)
 - Designed for daily scheduled execution but also runs on demand
 - Does NOT execute `/ticket-driver` or `/ticket-creator` directly — it spawns those in fresh Claude sessions
+
+---
+
+#### `/jira-sprint-todo-loop`
+**Purpose:** Bulk-launch implementation on ready TODO-column tickets ahead of sprint pickup
+
+**Usage:**
+```
+/jira-sprint-todo-loop
+```
+
+**What it does:**
+- Scans the operator's TO DO-column tickets on the Trident BG board (391)
+- Filters to tickets genuinely ready to start early (not flagged, no unfinished dependency, has `ticket-creator`'s "Implementation Ready" comment marker)
+- Resolves each qualifying ticket's repos from `ticket-creator`'s "Repos Involved" comment and mass-launches a backgrounded `/ticket-driver <TICKET> TODO-MODE` session per repo, each in its own new git worktree
+- Posts a results summary (counts + launched ticket keys) to `#fabi-jira-sprint-manager` on Slack
+- Does NOT generate the daily sprint report (that's `jira-sprint-manager`) and does NOT implement anything itself (that's `ticket-driver`, which this skill only dispatches)
+
+---
+
+#### `/review-pr`
+**Purpose:** Critique review of a GitHub PR
+
+**Usage:**
+```
+/review-pr <PR_URL>
+/review-pr FULL <PR_URL>
+```
+
+**What it does:**
+- Runs a severity-tiered critique (security/correctness/performance/etc.) via the `code-review-specialist` agent
+- `FULL` additionally dispatches `pr-review-assist` for a synced two-pane diff+summary HTML artifact, presented alongside the critique under separate headings
+- Not for comprehension-only requests with no critique wanted — use `pr-review-assist` directly for that
+
+---
+
+#### `pr-review-assist`
+**Purpose:** Generate a comprehension aid for a GitHub PR (no critique)
+
+**Usage:** Triggered when the user gives a PR URL and asks to understand, walk through, summarize, or get oriented on it
+
+**What it does:**
+- Produces a single-file HTML artifact with a synced two-pane view: diff on the left, plain-language non-judgmental summary cards on the right, grouped into logical units of change
+- Clicking a card scrolls/highlights the matching diff range; scrolling the diff highlights the in-view card
+- Never flags bugs, suggests fixes, or assigns severity — for that, use `code-review-specialist` or `codex-review`
+
+---
+
+#### `/launch-pr-review-agent`
+**Purpose:** Run `/review-pr` in a separate background session
+
+**Usage:**
+```
+/launch-pr-review-agent <PR_URL>
+/launch-pr-review-agent <PR_URL> FULL
+```
+
+**What it does:**
+- Launches a new backgrounded Claude Code session that runs `/review-pr`, keeping the current session free
+- Visible in the agent view under a Jira-ticket-and-repo-derived name like "PR REVIEW - TRIDENT-974 - WEBAPP"
+
+---
+
+#### `/launch-research-agent`
+**Purpose:** Run `/research` in a separate background session
+
+**Usage:**
+```
+/launch-research-agent <repo(s)> <research description>
+/launch-research-agent <repo(s)> <research description> USE-OPUS
+```
+
+**What it does:**
+- Launches a new backgrounded Claude Code session that runs `/research` against the given repo(s), keeping the current session free
+- Visible in the agent view under a name like "RESEARCH - Loan Approval Flow - WEBAPP"
+- Optional `USE-OPUS` pins the launched session to Opus 4.8 instead of its default model
+
+---
+
+#### `/launch-resume-session`
+**Purpose:** Resume an existing ticket-driver or ticket-creation session in the background
+
+**Usage:**
+```
+/launch-resume-session <TICKET_KEY>
+/launch-resume-session <TICKET_KEY> CREATION
+/launch-resume-session <TICKET_KEY> DRIVER
+```
+
+**What it does:**
+- Looks up an existing session for the ticket in `~/.claude/memory/sessions.md`, checks whether it's still live, and — if not — resumes it in a new backgrounded session with no new prompt, just picking the conversation back up
+- Presents every session found for the ticket when the type is omitted
+- Does NOT start brand-new work on a ticket — that's `/ticket-driver` or `/ticket-creator` directly
+
+---
+
+#### `/create-spike-document`
+**Purpose:** Fill in or update a Confluence spike-review document from in-context research
+
+**Usage:**
+```
+/create-spike-document <Confluence page URL> <body sections>
+```
+
+**What it does:**
+- Fills each section from research already in the agent's context and writes a rich-formatted HTML page: Objective and Business Purpose side-by-side at the top, a Table of Contents, the caller's sections, then default trailing sections (Out of Scope, Jira Tickets, Effort Size, Dependencies, Appendix)
+- High-level writing style for business readers; deep technical detail goes in the Appendix
+- On follow-up updates, re-reads the live page and changes only what was asked, preserving everything else
+- Not for creating Jira tickets (use `ticket-creator`) or general Confluence pages unrelated to spikes
+
+---
+
+#### `/deploy-prbt-to-qa`
+**Purpose:** Deploy the current portal-react-boattrader (PRBT) branch to a QA environment end-to-end
+
+**Usage:**
+```
+/deploy-prbt-to-qa
+```
+
+**What it does:**
+- Picks the longest-idle `portal-react-boattrader-NN` AWS CodePipeline (idle ≥ 1 day, never the bare pipeline)
+- Runs the `boattrader-deploy-qa` bash function to trigger it, then watches Source/BuildAndDeploy/E2ETesting via AWS CLI (profile `bg-qa`)
+- On failure, investigates, fixes, and redeploys — except an E2E failure judged unrelated to the change, which counts as a pass
+- Only for portal-react-boattrader QA deploys — not other repos, not prod/stage
 
 ---
 
@@ -271,7 +407,7 @@ Expert in REST API design, database schemas, server-side business logic, authent
 #### `code-review-specialist`
 **Purpose:** Comprehensive code review with security and best practices focus
 
-Conducts thorough code reviews covering correctness, security, performance, maintainability, and style. Balances rigor with constructive feedback.
+Conducts thorough code reviews covering correctness, security, performance, maintainability, and style. Balances rigor with constructive feedback. Backed by `claude-opus-4-8`.
 
 **Triggers:** User asks for code review, completes a feature/refactor, or finishes a code change.
 
@@ -301,13 +437,15 @@ Researches frameworks, libraries, APIs, tools, and technical concepts. Synthesiz
 |-------|-------------|
 | **playwright-cli** | Browser automation for web testing, form filling, screenshots, and data extraction |
 | **e2e-debug-finance-funnel** | Debug finance funnel issues with iterative browser automation (reproduce → investigate → fix → verify) |
-| **codex-review** | Run OpenAI Codex CLI peer review against a GitHub PR URL, generating a structured report with fix/no-fix determinations (defaults to blind-debate mode) |
+| **codex-review** | Independent code-review pass via a dedicated Claude Opus 4.8 subagent (accepts a PR URL or a freeform review brief), generating a structured report with fix/no-fix determinations |
 | **review-pr-comments** | Analyze GitHub PR review threads, research unresolved comments, and optionally auto-fix issues |
+| **fix-node-vulnerabilities** | Remediate npm/Node vulnerabilities from an audit JSON, Dependabot/Snyk export, or dashboard screenshot — computes minimal non-breaking version bumps, researches breaking changes for unavoidable majors, and opens a PR |
 | **fetch-jira-acceptance-criteria** | Extract Acceptance Criteria from a Jira ticket's custom field |
 | **fetch-jira-qa-notes** | Extract QA Notes from a Jira ticket's custom field |
 | **skill-authoring** | Best practices for creating Claude Code skills, MCP tools, and AI agent capabilities |
 | **find-skills** | Discover and install skills from the open agent skills ecosystem |
 | **fix-claude-installation** | Fix broken Claude Code CLI installation caused by failed auto-updates |
+| **restore-chrome-bookmarks** | Restore Chrome bookmarks from Chrome's own `Bookmarks.bak` after they get overwritten/reset, flagging any bookmarks unique to the live file so nothing is lost |
 | **grill-me** | Interview the user relentlessly about a plan or design until shared understanding is reached (used by `ticket-creator` during clarification). From [Matt Pocock's skills repo](https://github.com/mattpocock/skills) |
 
 ## Plugins
@@ -365,7 +503,7 @@ ls ~/.claude/skills/
 1. Open **any project** in VS Code or Cursor
 2. Start Claude Code
 3. Type `/` to see available skills
-4. You should see `/ticket-driver`, `/bug-killer`, `/code-optimizer`, `/ticket-creator`, `/deep-dive-creator`, `/e2e-test-jira-ticket`, `/research`, `/bq-analyst`, and `/jira-sprint-manager`
+4. You should see `/ticket-driver`, `/bug-killer`, `/code-optimizer`, `/ticket-creator`, `/deep-dive-creator`, `/e2e-test-jira-ticket`, `/research`, `/bq-analyst`, `/jira-sprint-manager`, `/jira-sprint-todo-loop`, `/review-pr`, `/create-spike-document`, `/deploy-prbt-to-qa`, and more
 
 ### Alternative: Project-Specific Installation
 
@@ -409,15 +547,25 @@ claude-code-commands/
 │   ├── research/                # Codebase research + memory-backed write-ups
 │   ├── bq-analyst/              # BigQuery analytics for Trident loans
 │   ├── jira-sprint-manager/     # Daily sprint status report + auto-actions
+│   ├── jira-sprint-todo-loop/   # Bulk-launch ready TODO-column tickets early
+│   ├── create-spike-document/   # Fill/update a Confluence spike-review doc
+│   ├── deploy-prbt-to-qa/       # Deploy portal-react-boattrader to QA
+│   ├── review-pr/               # Critique review of a GitHub PR
+│   ├── pr-review-assist/        # Comprehension-only PR artifact (no critique)
+│   ├── launch-pr-review-agent/  # Run /review-pr in a background session
+│   ├── launch-research-agent/   # Run /research in a background session
+│   ├── launch-resume-session/   # Resume an existing driver/creator session
 │   ├── playwright-cli/
 │   ├── e2e-debug-finance-funnel/
 │   ├── codex-review/
 │   ├── review-pr-comments/
+│   ├── fix-node-vulnerabilities/
 │   ├── fetch-jira-acceptance-criteria/
 │   ├── fetch-jira-qa-notes/
 │   ├── skill-authoring/
 │   ├── find-skills/
 │   ├── fix-claude-installation/
+│   ├── restore-chrome-bookmarks/
 │   └── grill-me/                # Interview helper used by ticket-creator
 ├── plugins/
 │   ├── marketplaces/            # Installed plugin marketplaces
@@ -486,7 +634,7 @@ All commands in this repository follow these conventions:
 - Git installed and configured
 - For Jira integration: `gh` CLI or Jira API access (via Atlassian MCP)
 - For E2E testing skills: `playwright-cli` installed
-- For Codex review: OpenAI Codex CLI installed
+- For the `codex-peer-review` plugin (not the `codex-review` skill, which no longer needs it): OpenAI Codex CLI installed
 
 ## Contributing
 
