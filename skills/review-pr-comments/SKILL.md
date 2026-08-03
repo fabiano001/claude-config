@@ -1,6 +1,7 @@
 ---
 name: review-pr-comments
 description: Reviews GitHub PR comments and review threads, identifying resolved and unresolved feedback. Fetches PR review threads via GitHub GraphQL API, researches the codebase to assess each unresolved comment, and generates a markdown review report. Supports an autonomous mode that auto-fixes real issues, commits, pushes, and polls for new comments in a loop. Use when the user asks to review PR comments, check PR feedback, address PR review comments, triage PR threads, analyze review feedback, or autonomously fix PR comments on a pull request. Does NOT create new reviews or submit approvals — only reads, analyzes, and optionally fixes.
+model: claude-opus-4-8
 ---
 
 # Review PR Comments

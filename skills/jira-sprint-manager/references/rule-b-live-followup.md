@@ -56,7 +56,20 @@ Rule B is ALSO invoked via the **Rule C → Rule B back-edge chain** on any tick
         - Append to `REMINDERS`: `"<TICKET-KEY>: Live QA needed but no implementation session was logged. Please run /e2e-test-jira-ticket <TICKET-KEY> --live-qa manually in your working worktree."`.
         - Skip the rest of Rule B for this ticket this run.
 
-     3. **Open a new Claude session resuming the implementation session** via the helper script:
+     3. **Live-agent check (NEW — runs before any resume attempt).** Follow [references/live-agent-check.md](live-agent-check.md) in full: run `claude agents --all --json`, find the entry whose `sessionId == IMPL_SESSION_ID`, and test for a `pid` field.
+
+        - **NOT LIVE** (no matching entry, or matching entry has no `pid`) → proceed to step 4 below exactly as documented.
+        - **LIVE** (matching entry has a `pid`) → this is terminal for Rule B on this ticket this run:
+          - Append to `actionsTaken`: `"Live QA kickoff skipped — session <IMPL_SESSION_ID> (\"<AGENT_NAME>\") is currently live as a background agent; auto-resume is not possible. Ready-made prompt below for you to paste in manually."`.
+          - Append to `REMINDERS`:
+            ```
+            <TICKET-KEY>: session "<AGENT_NAME>" is live in the background — open `claude agents`, find it, press space to reply, and paste this prompt:
+
+            /e2e-test-jira-ticket <TICKET-KEY> --live-qa
+            ```
+          - Skip the rest of Rule B for this ticket this run. Do NOT attempt `--fork-session`, do NOT `kill` the pid and retry, do NOT script the `claude agents` TUI — see live-agent-check.md's "What NOT to do" for why each of those is unsafe or ineffective.
+
+     4. **Open a new Claude session resuming the implementation session** (only reached when the live-agent check found NOT LIVE) via the helper script:
         ```
         ~/.claude/skills/jira-sprint-manager/open-claude-session.sh \
           ~/BOATS-GROUP-PROJECTS-GITHUB/<IMPL_REPO_DIR> \
@@ -70,9 +83,9 @@ Rule B is ALSO invoked via the **Rule C → Rule B back-edge chain** on any tick
         - Append to `REMINDERS`: similar message.
         - Skip the rest of Rule B for this ticket.
 
-     4. **On success:** the implementation session is now driving Live QA in a separate iTerm2 tab. Append to `actionsTaken`: `"Live QA kicked off — resumed implementation session <IMPL_SESSION_ID> in <IMPL_REPO_DIR> with /e2e-test-jira-ticket <TICKET-KEY> --live-qa."`. Append to `REMINDERS`: `"<TICKET-KEY>: Live QA running in resumed session in <IMPL_REPO_DIR> — watch that iTerm2 tab for progress. The next run will see the Live QA Pass comment and re-evaluate."`.
+     5. **On success:** the implementation session is now driving Live QA in a separate iTerm2 tab. Append to `actionsTaken`: `"Live QA kicked off — resumed implementation session <IMPL_SESSION_ID> in <IMPL_REPO_DIR> with /e2e-test-jira-ticket <TICKET-KEY> --live-qa."` (the literal `--prompt` string used, verbatim — see SKILL.md's rule on this). **Also print that exact prompt string in your terminal response at the time of the call**, not just in this `actionsTaken` entry. Append to `REMINDERS`: `"<TICKET-KEY>: Live QA running in resumed session in <IMPL_REPO_DIR> — watch that iTerm2 tab for progress. The next run will see the Live QA Pass comment and re-evaluate."`.
 
-     5. **Skip the rest of Rule B for this ticket this run** — the auto-resumed session handles Live QA; on the next run, the Live QA Pass marker will be present and Rule B will route to the stakeholder check (step 3).
+     6. **Skip the rest of Rule B for this ticket this run** — the auto-resumed session handles Live QA; on the next run, the Live QA Pass marker will be present and Rule B will route to the stakeholder check (step 3).
 
    - **`no` answer** → operator opted out of automated Live QA. Skip the rest of Rule B for this ticket too — without Live QA proof, the stakeholder/close question doesn't make sense. Append to `actionsTaken`: `"Live QA skipped — operator declined; ticket remains in Live without Live QA verification on record."`. Append to `REMINDERS`: `"<TICKET-KEY>: Live QA needed but operator declined auto-run. Run /e2e-test-jira-ticket <TICKET-KEY> --live-qa manually if you want validation on record before closing."`.
 
@@ -129,7 +142,8 @@ Rule B is ALSO invoked via the **Rule C → Rule B back-edge chain** on any tick
 
 ### Live QA kickoff (step 2b)
 - No `## ticket-driver` entry in sessions.md for this ticket → manual-fallback action appended; operator runs `/e2e-test-jira-ticket --live-qa` themselves.
-- `open-claude-session.sh` exits non-zero → kickoff-failed action appended; operator runs the slash command manually.
+- Session is currently live as a background agent (per the live-agent check, step 3) → not a failure exactly, but a deferral: no resume is attempted; a ready-made prompt is handed to the operator instead. See [references/live-agent-check.md](live-agent-check.md).
+- `open-claude-session.sh` exits non-zero (only reachable when the live-agent check found NOT LIVE) → kickoff-failed action appended; operator runs the slash command manually.
 
 ### Close transition (step 7)
 - If `getTransitionsForJiraIssue` or `transitionJiraIssue` errors, append `"Close failed: <verbatim error>"` to `actionsTaken` and keep the original status. Print one terminal warning line.

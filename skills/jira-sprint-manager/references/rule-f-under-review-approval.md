@@ -18,8 +18,10 @@ Rule F evaluates each Under-Review ticket independently. Tickets Rule E just tra
    - `lambda-node-trident-700credit`
    - `lambda-node-trident-advertised-rates`
    - `lambda-node-trident-portal-lead`
+   - `lambda-node-trident-partner-lender`
    - `pp-algorithm`
    - `configd`
+   - `terraform-stack-trident`
 
    First match wins (more specific names listed first). If none appear in the text, **default to `webapp-react-trident`**.
 
@@ -45,7 +47,21 @@ Rule F evaluates each Under-Review ticket independently. Tickets Rule E just tra
 
    Drafts count toward the gate too — a draft PR with `reviewDecision == "APPROVED"` is treated as approved (rare, but defensible since the operator explicitly approved a draft). If you want to exclude drafts in the future, add a `&& !isDraft` clause.
 
-   If the gate fails (no PRs, any non-APPROVED PR, `null` reviewDecision, or `gh` errors), **skip this ticket** — no transition, no `actionsTaken` entry. The ticket stays in Under Review for the next run.
+   **When the gate does NOT pass**, handle each case differently — do NOT skip silently:
+
+   - **`gh pr list` returned an error (non-zero exit):** print one terminal warning line. No `actionsTaken` entry, no REMINDERS entry (PR state is unknown so no actionable reminder is possible). The next run retries.
+
+   - **No open PRs found (`PR_COUNT == 0`):** append a REMINDERS entry:
+     ```
+     <TICKET-KEY> is Under Review — no open PRs found in <repo>. Check that the PR was opened against the correct branch.
+     ```
+     No `actionsTaken` entry. The ticket stays in Under Review.
+
+   - **Open PRs found but not all APPROVED** (any PR has `reviewDecision != "APPROVED"` — includes `CHANGES_REQUESTED`, `REVIEW_REQUIRED`, or `null`): append a REMINDERS entry listing every unapproved PR URL:
+     ```
+     <TICKET-KEY> needs PR approvals to move to PROD READY: <url1>, <url2> (reviewDecision: <status1>, <status2>)
+     ```
+     No `actionsTaken` entry. The ticket stays in Under Review.
 
 4. **Scan for stakeholder triggers.** Match the ticket's `description` + `summary` text (case-insensitive) against this list of trigger phrases:
 
@@ -100,8 +116,9 @@ Rule F evaluates each Under-Review ticket independently. Tickets Rule E just tra
 
 ## Failure modes
 
-- **`gh pr list` fails** (non-zero exit) → skip the ticket silently (no `actionsTaken` entry, no warning beyond one terminal line). Rule F is best-effort — a `gh` outage shouldn't pollute the report with reminders. The next run retries.
-- **Gate fails** (no PRs / non-APPROVED PR present) → skip silently. This is the expected steady state for tickets still under review.
+- **`gh pr list` fails** (non-zero exit) → print one terminal warning line; no `actionsTaken` or REMINDERS entry. Rule F is best-effort — a `gh` outage shouldn't pollute the report with reminders. The next run retries.
+- **Gate fails — no open PRs** → append REMINDERS entry (see step 3). No `actionsTaken` entry. This is actionable: the operator should verify the PR was opened.
+- **Gate fails — PRs not all APPROVED** → append REMINDERS entry listing unapproved PRs with their `reviewDecision` status (see step 3). No `actionsTaken` entry. This is the expected steady state until reviewers approve.
 - **`getTransitionsForJiraIssue` errors** → append `"Move failed: could not fetch transitions: <error>"` to `actionsTaken`. Print one terminal warning.
 - **No matching transition available** (workflow has been edited) → append `"Move failed: no '<target>' transition available on this ticket"` (where `<target>` is `Stakeholder Review` or `Resolved - QA Complete`). Print one terminal warning. The ticket stays in Under Review.
 - **`transitionJiraIssue` errors** → append `"Move failed: <verbatim error>"`. Status stays as Under Review.

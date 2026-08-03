@@ -1,8 +1,13 @@
-Base directory for this skill: ~/.claude/skills/e2e-test-jira-ticket
+---
+name: e2e-test-jira-ticket
+description: Run an end-to-end Playwright CLI test for a Jira ticket — deploy to stage (when applicable), drive the funnel manually, verify the pass/fail rule, capture evidence, and report. Three modes: Standalone (propose-and-confirm URL/deploy/verify, then execute), Embedded (caller supplies confirmed values, used by ticket-driver), and Live QA (--live-qa, tests what's already deployed with no deploy step, posts a QA Pass Jira comment on success). Production deployment is forbidden in all modes. Use when the user asks to run an E2E test for a Jira ticket, verify a ticket's funnel end-to-end, or do live QA on a deployed change.
+---
 
 # e2e-test-jira-ticket
 
 Run an end-to-end test for a Jira ticket using Playwright CLI: deploy the changes to stage (when applicable), drive the funnel manually, verify the pass/fail rule, capture evidence, and report. Production deployment is **forbidden**.
+
+Base directory for this skill: ~/.claude/skills/e2e-test-jira-ticket
 
 This skill has three entry modes — keep them straight as you read:
 
