@@ -128,7 +128,20 @@ Repo-side branch protection allows the merge, but the operator's policy is to cl
    - Append to `REMINDERS`: `"<TICKET-KEY>: PR #<N> (<PR URL>) has <UNRESOLVED_COUNT> unresolved review comments. No implementation session was logged; please run /review-pr-comments manually in your working worktree."`.
    - Skip the rest of Rule C for this ticket.
 
-3. **Open a new Claude session resuming the implementation session** via the helper script:
+3. **Live-agent check (NEW — runs before any resume attempt).** Follow [references/live-agent-check.md](live-agent-check.md) in full: run `claude agents --all --json`, find the entry whose `sessionId == IMPL_SESSION_ID`, and test for a `pid` field.
+
+   - **NOT LIVE** (no matching entry, or matching entry has no `pid`) → proceed to step 4 below exactly as documented.
+   - **LIVE** (matching entry has a `pid`) → this is terminal for Rule C on this ticket this run:
+     - Append to `actionsTaken`: `"Merge skipped — PR #<N> has <UNRESOLVED_COUNT> unresolved review comments; session <IMPL_SESSION_ID> (\"<AGENT_NAME>\") is currently live as a background agent, so auto-resume is not possible. Ready-made prompt below for you to paste in manually."`.
+     - Append to `REMINDERS`:
+       ```
+       <TICKET-KEY>: PR #<N> (<PR URL>) has <UNRESOLVED_COUNT> unresolved review comments. Session "<AGENT_NAME>" is live in the background — open `claude agents`, find it, press space to reply, and paste this prompt:
+
+       /review-pr-comments <PR URL> autonomous
+       ```
+     - Skip the rest of Rule C for this ticket this run. Do NOT attempt `--fork-session`, do NOT `kill` the pid and retry, do NOT script the `claude agents` TUI — see live-agent-check.md's "What NOT to do" for why each of those is unsafe or ineffective.
+
+4. **Open a new Claude session resuming the implementation session** (only reached when the live-agent check found NOT LIVE) via the helper script:
    ```
    ~/.claude/skills/jira-sprint-manager/open-claude-session.sh \
      ~/BOATS-GROUP-PROJECTS-GITHUB/<IMPL_REPO_DIR> \
@@ -142,9 +155,9 @@ Repo-side branch protection allows the merge, but the operator's policy is to cl
    - Append to `REMINDERS`: similar message.
    - Skip the rest of Rule C for this ticket.
 
-4. **On success:** the implementation session is now driving the autonomous review-comments loop in a separate iTerm2 tab. Append to `actionsTaken`: `"Merge skipped — PR #<N> has <UNRESOLVED_COUNT> unresolved review comments. Resumed implementation session <IMPL_SESSION_ID> in <IMPL_REPO_DIR> with /review-pr-comments <PR URL> autonomous."`. Append to `REMINDERS`: `"<TICKET-KEY>: PR #<N> has <UNRESOLVED_COUNT> unresolved review comments — your implementation session was resumed in <IMPL_REPO_DIR> with /review-pr-comments autonomous. Watch that iTerm2 tab for progress; the next run will re-evaluate once the comments are resolved."`.
+5. **On success:** the implementation session is now driving the autonomous review-comments loop in a separate iTerm2 tab. Append to `actionsTaken`: `"Merge skipped — PR #<N> has <UNRESOLVED_COUNT> unresolved review comments. Resumed implementation session <IMPL_SESSION_ID> in <IMPL_REPO_DIR> with /review-pr-comments <PR URL> autonomous."` (the literal `--prompt` string used, verbatim — see SKILL.md's rule on this). **Also print that exact prompt string in your terminal response at the time of the call**, not just in this `actionsTaken` entry. Append to `REMINDERS`: `"<TICKET-KEY>: PR #<N> has <UNRESOLVED_COUNT> unresolved review comments — your implementation session was resumed in <IMPL_REPO_DIR> with /review-pr-comments autonomous. Watch that iTerm2 tab for progress; the next run will re-evaluate once the comments are resolved."`.
 
-5. **Do NOT build a merge plan and do NOT ask the operator any question for this ticket** — the auto-resume IS the action. The operator monitors the new iTerm2 tab; the next `/jira-sprint-manager` run will re-check the PR (presumably with `UNRESOLVED_COUNT == 0` after the autonomous loop has resolved the threads) and either auto-resume again (if more comments arrived) or fall through to the merge-plan path.
+6. **Do NOT build a merge plan and do NOT ask the operator any question for this ticket** — the auto-resume IS the action (or, if the live-agent check found the session LIVE, the ready-made-prompt REMINDERS entry IS the action). The operator either monitors the new iTerm2 tab or pastes the provided prompt in manually; the next `/jira-sprint-manager` run will re-check the PR (presumably with `UNRESOLVED_COUNT == 0` after the review comments are resolved) and either auto-resume again (if more comments arrived), re-surface the live-agent reminder, or fall through to the merge-plan path.
 
 **Path 3c — Fully clean** (`MERGEABLE == true` AND `UNRESOLVED_COUNT == 0`):
 
@@ -383,6 +396,7 @@ If a future maintainer edits this rule to add a fallback `firebase deploy` step,
 - **PR not mergeable** (pre-flight path 3a — failing checks, blocked reviews, conflicts, draft, etc.): append the verbose "Merge skipped — PR #<N> not mergeable. Failing checks: …. Required action: …. Resolve and re-run." action per path 3a above, plus the matching REMINDERS entry. **No question is asked** for this ticket; the operator's next move is to resolve the blockers and let the next run pick the ticket up again.
 - **PR has unresolved review comments only** (pre-flight path 3b — branch protection allows merge but operator wants threads resolved first): append the "Merge skipped — PR #<N> has <UNRESOLVED_COUNT> unresolved review comments. Resumed implementation session …" action per path 3b above. **No question is asked**; the auto-resumed session handles the review-comment loop autonomously.
 - **Unresolved comments path can't find the implementation session** (no-session fallback in path 3b step 2): append the manual-fallback action; the operator runs `/review-pr-comments` themselves.
+- **Unresolved comments path finds the session but it's currently live as a background agent** (path 3b step 3, the live-agent check): not a failure — append the "skipped, ready-made prompt provided" action and REMINDERS block per [references/live-agent-check.md](live-agent-check.md); the operator pastes the prompt in manually instead of the skill auto-resuming.
 - `gh` CLI not available / unauthenticated: append to `actionsTaken`: `"Deploy skipped — gh CLI unavailable or unauthenticated"`.
 - GraphQL query for review threads fails: treat `UNRESOLVED_COUNT` as `0` (don't block a legitimate deploy on a query failure), append a one-line warning to the terminal: `"Could not fetch review threads for PR #<N>; proceeding without unresolved-comment check."`. Continue to path 3c (clean merge plan).
 - Slack MCP unavailable: per Apply-the-answer step 5.3 above, continue but record the warning.

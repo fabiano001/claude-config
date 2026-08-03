@@ -27,8 +27,6 @@
       "Bash(gh api:*)",
       "Bash(gh pr:*)",
       "Bash(sleep:*)",
-      "Bash(command -v codex:*)",
-      "Bash(codex:*)",
       "Bash(npm install:*)",
       "Bash(npm run:*)",
       "Bash(npm test:*)",
@@ -44,6 +42,8 @@
       "Bash(gcloud logging read --project=trident-funding:*)",
       "Bash(GCLOUD_PROJECT=trident-funding node temp/check-loan-readonly.js:*)",
       "Bash(GCLOUD_PROJECT=trident-funding node scripts/apply-known-fix.js:*)",
+      "Bash(GCLOUD_PROJECT=trident-funding node scripts/resubmit-loan.js:*)",
+      "Bash(GCLOUD_PROJECT=stage-trident node scripts/resubmit-loan.js:*)",
       "Bash(playwright-cli:*)",
       "Bash(playwright-cli eval *)",
       "Bash(playwright-cli eval:*)",
@@ -52,6 +52,7 @@
       "Bash(npx playwright-cli run-code:*)",
       "Bash(UNIQUE_EMAIL=:*)",
       "WebFetch(domain:github.com)",
+      "WebFetch(domain:claude.ai)",
       "WebSearch",
       "mcp__atlassian__search",
       "mcp__atlassian__searchJiraIssuesUsingJql",
@@ -60,10 +61,12 @@
       "mcp__atlassian__getAccessibleAtlassianResources",
       "mcp__atlassian__fetch",
       "mcp__context7__*",
-      "mcp__sequential-thinking__*"
+      "mcp__sequential-thinking__*",
+      "mcp__claude_ai_Slack__slack_send_message"
     ],
     "defaultMode": "auto"
   },
+  "model": "sonnet",
   "hooks": {
     "PreToolUse": [
       {
@@ -132,7 +135,6 @@
     "padding": 0
   },
   "enabledPlugins": {
-    "codex-peer-review@agent-peer-review-marketplace": true,
     "typescript-lsp@claude-plugins-official": true
   },
   "alwaysThinkingEnabled": true,
@@ -142,5 +144,11 @@
   },
   "agentPushNotifEnabled": true,
   "skipAutoPermissionPrompt": true,
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "Posting a loan-recovery status note to the #finance-prod-alerts Slack channel via mcp__claude_ai_Slack__slack_send_message (the ✅ resolution reply, or the ⚠️ needs-manual-recovery / auto-recovery-halted note emitted by the fix-prod-submission-error skill). This is operator-authorized team notification — it writes no data and is never destructive or security-sensitive. PII redaction remains the skill's own content rule."
+    ]
+  },
   "voiceEnabled": true
 }

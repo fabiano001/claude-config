@@ -73,8 +73,10 @@ The response contains at least ONE ticket whose `fields.status.name` is in:
    - `lambda-node-trident-700credit`
    - `lambda-node-trident-advertised-rates`
    - `lambda-node-trident-portal-lead`
+   - `lambda-node-trident-partner-lender`
    - `pp-algorithm`
    - `configd`
+   - `terraform-stack-trident`
 
    First match wins. If none appear in the text, **default to `webapp-react-trident`**.
 

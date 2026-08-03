@@ -1,8 +1,8 @@
 # Determination Criteria
 
-Use these criteria when evaluating each Codex finding against the actual codebase.
+Use these criteria when evaluating each reviewer-agent finding against the actual codebase.
 
-**Relationship to plugin v2.0.0 verdict mapping:** SKILL.md Step 4 first maps each plugin section to a default determination (`Critical`/`Important` → Real issue, `Contested` → Real issue / Leave as is, `Dismissed` / `Style notes` → Not a real issue). The criteria below are used to **override** that default when your codebase research contradicts it — e.g. a `Critical` finding that an existing test already validates is downgraded to "Not a real issue" with a justification, or an `Important` finding in pre-existing untouched code is kept as "Real issue" but recommended as "Leave as is" rather than "Fix".
+**Relationship to the Step 4 verdict mapping:** SKILL.md Step 4 first maps each reviewer-agent severity to a default determination (`Critical`/`Important` → Real issue, `Minor` → Not a real issue). The criteria below are used to **override** that default when your codebase research contradicts it — e.g. a `Critical` finding that an existing test already validates is downgraded to "Not a real issue" with a justification, or an `Important` finding in pre-existing untouched code is kept as "Real issue" but recommended as "Leave as is" rather than "Fix". Since the reviewer is now a single Opus 4.8 agent rather than a two-AI debate, this override step is the primary correctness check, not a tie-breaker — don't skip it.
 
 ## Not a Real Issue
 
@@ -10,10 +10,10 @@ Classify a finding as **"Not a real issue"** when ANY of these apply:
 
 | Reason | Example |
 |--------|---------|
-| **Already handled** | Codex flags missing error handling, but a try/catch exists in a parent function |
-| **Project convention** | Codex suggests a pattern that contradicts the project's established conventions (check CLAUDE.md, existing code) |
-| **Style preference** | Codex prefers a different naming convention, import style, or formatting approach that doesn't affect correctness |
-| **False positive** | Codex misreads the code flow, misses a guard clause, or doesn't understand the framework (e.g., MobX, Ant Design) |
+| **Already handled** | The reviewer flags missing error handling, but a try/catch exists in a parent function |
+| **Project convention** | The reviewer suggests a pattern that contradicts the project's established conventions (check CLAUDE.md, existing code) |
+| **Style preference** | The reviewer prefers a different naming convention, import style, or formatting approach that doesn't affect correctness |
+| **False positive** | The reviewer misreads the code flow, misses a guard clause, or doesn't understand the framework (e.g., MobX, Ant Design) |
 | **Out of scope** | The flagged code was not modified by this branch — it's a pre-existing issue |
 | **Intentional design** | The code is written this way on purpose (e.g., performance optimization, backwards compatibility) |
 
