@@ -76,7 +76,10 @@ CORRECT command patterns (copy these exactly, substituting paths):
   git -C /absolute/path add src/foo/bar.ts
   git -C /absolute/path commit -m "message"
   git -C /absolute/path push -u origin BRANCH_NAME
-  gh pr create --repo owner/repo --base main --head BRANCH --title "title" --body "Single-line plain text body with no newlines or # characters"
+  gh pr create --repo owner/repo --base main --head BRANCH --draft --title "title" --body "Single-line plain text body with no newlines or # characters"
+  gh pr ready PR_URL
+  gh pr comment PR_URL --body "atlantis plan -p bg-qa"
+  gh pr view PR_URL --json comments
   sleep 1200
 
 **SECTION 2 — CONTEXT (substitute actual values)**
@@ -84,11 +87,16 @@ CORRECT command patterns (copy these exactly, substituting paths):
 PROJECT_ROOT: <absolute path to the project root — the current IDE workspace>
 TICKET_NAME: <ticket key, e.g., TRIDENT-655>
 BRANCH_NAME: <current git branch name — use branch name, not ticket name>
+REPO_NAME: <this run's own repo name, from SKILL.md's Guard step 0, e.g. terraform-stack-trident>
+IS_TERRAFORM_REPO: <true if REPO_NAME contains "terraform" case-insensitively, else false — determines the draft-PR exception in Step 2c and whether Step 6 or Step 6-terraform runs>
 
 **SECTION 3 — PLAN (paste the finalized plan sections)**
 
 HIGH LEVEL PLAN:
 <the numbered task list from the planning phase>
+
+FEATURE GROUPING:
+<the numbered mini-feature list from the planning phase — each entry names which task(s) below it covers. A commit lands, and (for the first entry) the draft PR gets created, when all of a feature's tasks are done — see Step 2 below.>
 
 TASK BREAKDOWN:
 <the full task breakdown with file paths, test names, and rationale>
@@ -109,38 +117,58 @@ Use the Read tool to read these files. Internalize their contents as project rul
 Do NOT skip this step. Do NOT proceed to Step 1 until you have read and internalized these files.
 
 Step 1 — Write initial status.md:
-Write PROJECT_ROOT/dynamic-app/docs/status.md with EVERY task from the HIGH LEVEL PLAN as unchecked items ([ ] 1. task ...). **This file is NEVER committed to git — it is an in-run task tracker only. See Step 4's ⛔ NEVER COMMIT rule.** This includes the implementation/test tasks YOU will execute below AND the post-executor tasks the parent ticket-driver agent owns (review-pr-comments, codex-review, E2E test, QA Pass Jira comment, Jira finalization). Do NOT trim the list to just the coding tasks — the parent agent reads back this same file and ticks off the remaining items as each post-executor step completes. The status.md file is the single source of truth for "where is this ticket in its lifecycle?"; an incomplete list defeats that.
+Write PROJECT_ROOT/dynamic-app/docs/status.md with EVERY task from the HIGH LEVEL PLAN as unchecked items ([ ] 1. task ...), grouped under a heading per entry in FEATURE GROUPING (e.g. `## Feature 1 — <name>` followed by that feature's unchecked tasks), so progress is legible feature-by-feature as Step 2 works through them. **This file is NEVER committed to git — it is an in-run task tracker only. See Step 4's ⛔ NEVER COMMIT rule.** This includes the implementation/test tasks YOU will execute below AND the post-executor tasks the parent ticket-driver agent owns (review-pr-comments, codex-review, E2E test, QA Pass Jira comment, Jira finalization). Do NOT trim the list to just the coding tasks — the parent agent reads back this same file and ticks off the remaining items as each post-executor step completes. The status.md file is the single source of truth for "where is this ticket in its lifecycle?"; an incomplete list defeats that.
 
-Step 2 — Execute tasks in a loop:
-Repeat the following 3-step cycle for EACH task in order. Do not skip any step.
+Step 2 — Execute FEATURES in order, committing (and, for the first one, opening a draft PR) as each completes:
+For EACH feature in FEATURE GROUPING, in order, repeat this cycle. Do not skip any sub-step, and do not move to the next feature until the current one is fully committed (Step 2c).
 
-  Step 2a — Execute the task:
-  Follow TDD-first rules (write tests FIRST, implement SECOND). Exceptions: pure config changes, dependency updates with no logic, trivial one-line fixes already covered by tests. Use the Edit tool for all code changes. Keep diffs minimal. Run lint, typecheck, and tests after each implementation chunk. Iterate until green.
+  Step 2a — Execute this feature's tasks:
+  For each task belonging to this feature (per TASK BREAKDOWN), follow TDD-first rules (write tests FIRST, implement SECOND). Exceptions: pure config changes, dependency updates with no logic, trivial one-line fixes already covered by tests. Use the Edit tool for all code changes. Keep diffs minimal. Run lint, typecheck, and tests after each implementation chunk. Iterate until green.
 
   Step 2b — Update status.md (MANDATORY after every task):
-  Use the Edit tool to change [ ] to [x] for the task you just completed in PROJECT_ROOT/dynamic-app/docs/status.md. This is not optional. Do this immediately after each task passes, before starting the next task. Only tick the items YOU executed in this loop — leave the post-executor items (review-pr-comments, codex-review, E2E, QA Pass Jira comment, Jira finalization) unchecked. The parent agent ticks those off as it processes them after you return.
+  Use the Edit tool to change [ ] to [x] for the task you just completed, under this feature's heading in PROJECT_ROOT/dynamic-app/docs/status.md. This is not optional. Do this immediately after each task passes, before starting the next task. Only tick the items YOU executed in this loop — leave the post-executor items (review-pr-comments, codex-review, E2E, QA Pass Jira comment, Jira finalization) unchecked. The parent agent ticks those off as it processes them after you return.
 
-  Step 2c — Move to the next task and repeat from Step 2a.
+  Step 2c — Commit this feature (MANDATORY once ALL of this feature's tasks are done and green):
+  - Run lint and tests covering (at minimum) the files this feature touched — a full-project run is fine too. Only proceed once clean.
+  - Stage ONLY this feature's changed files with `git add` (one file per call — never `git add -A` or `git add .`).
+
+    **⛔ NEVER COMMIT THESE FILES — they are run-state / local docs, not source code (applies to EVERY feature's commit, not just the last):**
+    - `dynamic-app/docs/status.md` — the in-run task tracker; committing it pollutes branch history with ticket-driver's own internal state.
+    - `dynamic-app/docs/learnings.md` — a local post-run notes file; not part of the deliverable.
+    - Any other file under `dynamic-app/docs/` written by ticket-driver itself.
+
+    Check `git -C <PROJECT_ROOT> status --short` before staging and explicitly SKIP the files above. If accidentally staged, unstage with `git -C <PROJECT_ROOT> restore --staged <path>` before committing.
+  - Commit with a message naming this feature, e.g. `git -C <PROJECT_ROOT> commit -m "<TICKET_NAME>: <feature name> — tests + implementation"`.
+  - **If this is the FIRST feature in FEATURE GROUPING:**
+    1. Push the branch: `git -C <PROJECT_ROOT> push -u origin <BRANCH_NAME>`.
+    2. Create the PR **as a draft** — IMPORTANT: the `--body` value must be a single-line string with NO newlines and NO `#` characters (these trigger a Claude Code security prompt that blocks autonomous execution); use plain text separators instead of markdown headers:
+       ```
+       gh pr create --repo owner/repo --base main --head BRANCH_NAME --draft --title "BRANCH_NAME: Short title" --body "Summary: bullet1, bullet2. Test plan: item1, item2."
+       ```
+       **This PR stays in draft permanently — never run `gh pr ready` on it, at this step or any later one, including after all features/reviews/E2E are done.**
+
+       **Terraform exception:** if `REPO_NAME` (this run's own repo, resolved by SKILL.md's Guard step) contains `terraform` case-insensitively (e.g. `terraform-stack-trident`), do NOT leave this PR in draft — immediately run `gh pr ready <PR_URL>` right after the `gh pr create --draft` call above returns. Terraform changes need a human reviewer looking at an actual (non-draft) PR alongside Atlantis's plan output before anything gets applied — see **Step 6-terraform** below, which replaces the Playwright E2E step for these repos and is where that review actually happens. Every other repo keeps the permanent-draft behavior unchanged.
+    3. Capture the PR URL as `PR_URL` from the command's output. Every later reference to "the PR" (review-pr-comments, codex-review, the final summary) uses this same URL — it is not recreated for later features.
+  - **If this is NOT the first feature:**
+    1. Push to the SAME branch: `git -C <PROJECT_ROOT> push origin <BRANCH_NAME>`.
+    2. Do NOT create a new PR. `PR_URL` from the first feature's commit is still correct — the new commit lands on that same open draft PR automatically.
+
+  Step 2d — Move to the next feature and repeat from Step 2a. Once the last feature in FEATURE GROUPING is committed and pushed, proceed to Step 3.
+
+  **Degenerate case:** if FEATURE GROUPING has exactly one entry (a small ticket), this loop simply runs once — one commit, draft PR created on that one commit. That's the correct outcome, not a special case to branch around.
 
 Step 3 — Code Review and Production Validation:
+Runs ONCE, after every feature from Step 2 has been committed and pushed — reviews the FULL accumulated diff across all features, not per-feature.
 - Run the code-review-specialist agent (via Agent tool) to review all changes. Fix issues found in the current branch only (not preexisting issues).
 - Run the production-code-validator agent (via Agent tool) to validate production readiness. Fix issues found in the current branch only.
 
-Step 4 — Commit, Push, and PR:
-- Run lint and tests one final time. Only proceed if both pass.
-- Stage changed files with git add (one file per call — never git add -A or git add .).
-
-  **⛔ NEVER COMMIT THESE FILES — they are run-state / local docs, not source code:**
-  - `dynamic-app/docs/status.md` — this is the in-run task tracker; committing it pollutes the branch history with ticket-driver's own internal state.
-  - `dynamic-app/docs/learnings.md` — this is a local post-run notes file; it is NOT part of the deliverable.
-  - Any file under `dynamic-app/docs/` that was written by ticket-driver itself (status, learnings).
-
-  Before staging, check `git -C <PROJECT_ROOT> status --short` and explicitly SKIP any of the above files. If you catch yourself about to stage them, abort the `git add` for those files and continue without them. If they were accidentally staged, unstage them with `git -C <PROJECT_ROOT> restore --staged dynamic-app/docs/status.md` (and the same for learnings.md) before committing.
-
-- Commit with a descriptive message.
-- Push to remote.
-- Create PR using gh pr create. IMPORTANT: The --body value must be a single-line string with NO newlines and NO # characters — these trigger Claude Code security prompts ("Newline followed by # inside a quoted argument") that block autonomous execution. Use plain text separators instead of markdown headers:
-    gh pr create --repo owner/repo --base main --head BRANCH_NAME --title "BRANCH_NAME: Short title" --body "Summary: bullet1, bullet2. Test plan: item1, item2."
+Step 4 — Final commit + push for any Step 3 fixes (the PR already exists — do NOT create another one):
+- Run lint and tests one final time across the whole branch. Only proceed if both pass.
+- If Step 3 made no changes at all, skip the rest of this step entirely — do not create an empty commit.
+- Otherwise, stage the files Step 3 changed with `git add` (one file per call — never `git add -A` or `git add .`). Apply the same ⛔ NEVER COMMIT rule from Step 2c (status.md, learnings.md, anything else ticket-driver itself writes under `dynamic-app/docs/`).
+- Commit with a descriptive message (e.g. "Address code-review-specialist / production-code-validator findings").
+- Push to the same branch: `git -C <PROJECT_ROOT> push origin <BRANCH_NAME>`.
+- `PR_URL` (captured in Step 2c on the first feature's commit) is unchanged and remains in draft — nothing else to do here.
 
 Step 5 — Write learnings.md:
 After all tasks are complete, write PROJECT_ROOT/dynamic-app/docs/learnings.md with: Summary (what was implemented, key files, PR URL) and Learnings (anything unexpected, workarounds, patterns, gotchas — or "No significant learnings" if straightforward). **This file is NEVER committed to git — it is a local post-run notes file only. See Step 4's ⛔ NEVER COMMIT rule.**
@@ -175,7 +203,7 @@ The executor wrote `<PROJECT_ROOT>/dynamic-app/docs/status.md` at its Step 1 wit
 |---|---|---|
 | 3. Codex review (pre-clean pass) | `9. Run /codex-review … (pre-clean)` | After step 3a captures the report paths. |
 | 4. Review PR comments | `10. Run /review-pr-comments …` | After step 4a captures the report paths. |
-| 5. Codex review (final pass) | `11. Run /codex-review … (final pass)` | After step 5a captures the report paths. |
+| 5. Codex review (final pass) | `11. Run /codex-review … (final pass)` | After step 5a captures the report paths, OR immediately after the gate check decides to skip the pass (no new commits from step 4) — the gate decision itself counts as the item being processed, same pattern as rows 7/8. |
 | 6. E2E test | `12. E2E test using Playwright CLI …` | After the `e2e-test-jira-ticket` skill returns, regardless of pass/fail. If E2E failed, the item is still "completed" — the failure is recorded in `E2ETEST-Report.md`, not as an unchecked status. |
 | 7. QA Pass Jira comment | `13. On E2E pass: post "QA Pass …" Jira comment` | After the comment posts, OR after deciding to skip per the skip rules (E2E failed / E2E opted out). Both outcomes count as the item being processed. |
 | 8. Jira finalization | `14. On success: transition Jira ticket …` | After the transition + assign + worklog land, OR after deciding to skip per the skip rules. |
@@ -198,25 +226,34 @@ If a step is genuinely SKIPPED (e.g., E2E opted out during planning means the E2
 
    **Auto-continue (regardless of findings):** zero findings / all "Not a real issue" is a green light — note "Codex pre-clean: no findings to fix" in one line and continue to step 4. A Codex tool error / cannot-run → report the error and the next step the operator should take, then stop.
 
-4. **Wait for review bots, then review PR comments**: First run `sleep 1200` as a **foreground blocking Bash call** — do NOT use `run_in_background`; it must block for the full 20 minutes (set the Bash tool timeout to at least 1300000ms) so Cursor Bugbot / CI have time to post comments (including any triggered by the step-3 Codex push). Then invoke the skill with exactly: `/review-pr-comments <PR_URL> autonomous` — the "autonomous" keyword triggers the skill's auto-fix loop (Auto Steps A→B→C→D) which fixes issues, commits, pushes, sleeps 20 minutes, re-checks for new comments, and repeats up to 5 iterations until no new fixable issues remain. This loop is the **terminal convergence step among the auto-pushers** — it drives the PR's review threads to a clean state.
+4. **Wait for review bots, then review PR comments**: **First capture `PRE_REVIEW_HEAD_SHA`** via `git -C <PROJECT_ROOT> rev-parse HEAD` (standalone Bash) — this is the gate signal step 5 needs, so it must be captured before anything else in this step runs. Then run `sleep 1200` as a **foreground blocking Bash call** — do NOT use `run_in_background`; it must block for the full 20 minutes (set the Bash tool timeout to at least 1300000ms) so Cursor Bugbot / CI have time to post comments (including any triggered by the step-3 Codex push). Then invoke the skill with exactly: `/review-pr-comments <PR_URL> autonomous` — the "autonomous" keyword triggers the skill's auto-fix loop (Auto Steps A→B→C→D) which fixes issues, commits, pushes, sleeps 20 minutes, re-checks for new comments, and repeats up to 5 iterations until no new fixable issues remain. This loop is the **terminal convergence step among the auto-pushers** — it drives the PR's review threads to a clean state.
 
    **4a. Capture PR review report paths (runs IMMEDIATELY after step 4 returns).** The `/review-pr-comments` skill writes its reports directly to `~/.claude/memory/ticket-reports/<TICKET>/pr-review/`. No stash dance, no copy — the files are already at the durable location. This step just records the paths for the final summary.
    1. List the directory: `ls ~/.claude/memory/ticket-reports/<TICKET>/pr-review/` (standalone Bash).
    2. Collect every `<TICKET>-PR-REVIEW-*.md` (or `PR-<number>-REVIEW-*.md`) filename into `PR_REVIEW_REPORT_PATHS`, prefixing each with the absolute directory path.
    3. If the directory does not exist or is empty (skill ran but produced nothing — extremely rare), set `PR_REVIEW_REPORT_PATHS` to an empty list. The final summary will show `none generated`.
 
-5. **Codex review — final pass (ONLY after step 4 is fully complete)**: Wait for `/review-pr-comments` to finish its entire autonomous loop (all iterations, up to 5 max) before proceeding. Then run `/codex-review` with the PR URL in **autonomous** mode again — a final correctness pass on the now-final diff. It auto-fixes, commits, and pushes any remaining real issues.
+5. **Codex review — final pass, GATED on step 4 having produced new commits (ONLY after step 4 is fully complete)**: Wait for `/review-pr-comments` to finish its entire autonomous loop (all iterations, up to 5 max) before proceeding.
+
+   **Gate check (run this before anything else in this step):** capture `POST_REVIEW_HEAD_SHA` via `git -C <PROJECT_ROOT> rev-parse HEAD` (standalone Bash) and compare it to `PRE_REVIEW_HEAD_SHA` from step 4.
+   - **`POST_REVIEW_HEAD_SHA == PRE_REVIEW_HEAD_SHA`** (no new commits — `/review-pr-comments` found nothing to fix, i.e. it went straight to Auto Step D with an empty fix list on every iteration) → **skip this Codex pass entirely.** The diff is identical to what step 3's pre-clean pass already reviewed, so re-reviewing it would be redundant. Note "Codex final pass skipped — review-pr-comments made no new commits since the pre-clean pass" in one line, then continue directly to step 6.
+   - **They differ** (at least one commit landed — `/review-pr-comments` found and fixed real issues) → proceed with the Codex pass below; the diff has genuinely changed since step 3 and deserves a final correctness look.
+
+   When the gate passes, run `/codex-review` with the PR URL in **autonomous** mode again — a final correctness pass on the now-final diff. It auto-fixes, commits, and pushes any remaining real issues.
 
    **Late-comment handling (do NOT loop back here):** this final push *may* draw a fresh Cursor Bugbot comment, and `/review-pr-comments` does NOT run again inside ticket-driver to reap it. That is intentional and safe — `jira-sprint-manager` Rule C's **pre-merge unresolved-review-thread gate** (which auto-resumes `/review-pr-comments` via its path 3b) is the backstop that reaps any straggler before anything merges to prod. A real issue found this late is rare (two prior review passes already cleaned most), so the residual bot churn is minimal. Do NOT add another review-pr-comments iteration here — proceed to E2E.
 
-   **5a. Capture Codex (final-pass) report paths (runs IMMEDIATELY after step 5 returns).** Same pattern as step 3a/4a, applied to `~/.claude/memory/ticket-reports/<TICKET>/codex-review/`. **Append** any new `<TICKET>-CODEX-REVIEW-*.md` files to `CODEX_REVIEW_REPORT_PATHS` (do not drop the pre-clean report from step 3a). Empty ⇒ no new final-pass report.
+   **5a. Capture Codex (final-pass) report paths (runs IMMEDIATELY after step 5 returns — SKIP this sub-step too if the gate above skipped the Codex pass; there is no new report to capture).** Same pattern as step 3a/4a, applied to `~/.claude/memory/ticket-reports/<TICKET>/codex-review/`. **Append** any new `<TICKET>-CODEX-REVIEW-*.md` files to `CODEX_REVIEW_REPORT_PATHS` (do not drop the pre-clean report from step 3a). Empty ⇒ no new final-pass report.
 
-   **Auto-continue after this step (regardless of findings):** When Codex returns, proceed IMMEDIATELY to step 6 (E2E test). Possible Codex outcomes and what to do:
+   **Auto-continue after this step (regardless of outcome):** proceed IMMEDIATELY to step 6 (E2E test) in every case below — none of these is a stopping point:
+   - **Gate skipped the Codex pass** (no new commits from step 4) → continue to step 6.
    - **Real issues found and auto-fixed** → fixes are already committed/pushed by the autonomous loop; the Rule C backstop reaps any resulting bot comment at merge time. Continue to step 6.
    - **Real issues found but classified as "Leave as is"** → noted in the report, no action needed. Continue to step 6.
    - **Zero findings / all "Not a real issue" / only style observations** → this is a green light. Note "Codex final pass: no findings to fix" in one line, then continue to step 6. **Do NOT stop here.** Reaching this step's end is not a milestone for operator review; it is a transition point to the E2E step.
    - **Codex tool error / cannot run** → report the error and the next step the operator should take, then stop.
-6. **E2E test (delegated to the `e2e-test-jira-ticket` skill — runs ONLY after the final Codex pass is complete)**: **Skip this step entirely if the operator opted out during planning** (E2E Test Plan = "Skipped by operator.").
+6. **Determine which verification path runs (repo-type branch, checked FIRST, before anything else in this step)**: if `IS_TERRAFORM_REPO` is true (the run's own `REPO_NAME` contains `terraform` — same value resolved by SKILL.md's Guard step 0 and threaded through to the executor in Section 2), skip straight to **Step 6-terraform** below and do NOT run the Playwright E2E logic that follows — there is no funnel to test in a terraform repo. Every other repo runs the E2E test exactly as written below.
+
+   **E2E test (delegated to the `e2e-test-jira-ticket` skill — runs ONLY after the final Codex pass is complete)**: **Skip this step entirely if the operator opted out during planning** (E2E Test Plan = "Skipped by operator.").
 
    Otherwise, invoke the `e2e-test-jira-ticket` skill via the Skill tool, passing the three confirmed items from planning verbatim plus the `--fix-and-retry` flag. **This invocation is pre-authorized by the planning phase — no operator confirmation is needed at this step.** The autonomous orchestrator pattern means we want the skill to commit/push/redeploy fixes on failure, up to 5 iterations:
 
@@ -244,28 +281,69 @@ If a step is genuinely SKIPPED (e.g., E2E opted out during planning means the E2
    **What `ticket-driver` does after the skill returns:**
    - Check for `<PROJECT_ROOT>/E2ETEST-Report.md` — if it exists, the E2E failed. Skip BOTH the QA Pass Jira comment (step 7) AND the Jira finalization (step 8); leave the ticket as-is for the operator to triage.
    - If the file does NOT exist, the E2E passed (or was substituted via the verification-substitution rule but still proved the AC). Proceed to step 7 (QA Pass comment) and then step 8 (Jira finalization).
+   - **If the confirmed verification approach could not be run at all** (as opposed to running and failing, or running via a substitute that still proves the AC) **because of a genuine external/cross-repo blocker** — see "QA verification cannot be completed — STOP and ask" immediately below. Do NOT treat this as a pass. Do NOT invent or accept a lesser substitute (a CI dry-run, a unit-test-only pass, a partial invocation) as proof the AC was met, and do NOT proceed to steps 7/8.
+
+   ### QA verification cannot be completed — STOP and ask (applies to every verification path: Playwright E2E above, Atlantis in Step 6-terraform below, and any operator-approved custom substitute for a funnel-less repo)
+
+   Sometimes the agreed verification simply cannot run yet — not because the code is wrong, but because something outside this run's control isn't ready: a sibling repo's Terraform/Atlantis apply hasn't landed, a required AWS/GCP resource doesn't exist yet, a shared QA environment is locked by an unrelated change, a secret that has to be populated by a human hasn't been. This is fundamentally different from the verification-substitution rule in `planning-phase.md` ("Mid-execution updates to 'How to verify passing' are allowed but must be documented") — that rule only permits swapping to a *different approach that still proves the same AC*. It does NOT permit swapping to a *weaker* approach that fails to prove the AC at all, and it never permits treating "I could not verify this" as "this passed."
+
+   When this happens:
+   1. Do NOT write it off as a substitution and proceed to the QA Pass comment (step 7) or Jira finalization (step 8).
+   2. Do NOT transition the Jira ticket, log hours, or post the completion marker.
+   3. It is fine — often necessary — to still record what WAS independently verifiable (e.g., a real CI/CD pipeline dispatch that proves build/test/package/deploy-config correctness, or a full unit/integration-test parity suite) as a normal Jira comment, clearly labeled as partial and non-final. This is informational, not a QA Pass comment, and must not use the QA Pass title/format from `qa-pass-comment-template.md`.
+   4. **STOP and ask the operator** (this is the one narrow, deliberate exception to "the executor never asks questions" — it applies here to the parent ticket-driver session itself, which is interactive and operator-present, not to the already-returned autonomous executor subagent). Use `AskUserQuestion` or a direct question, stating plainly: what's blocking real verification, what WAS verified in the meantime, and ask how the operator wants to proceed — options typically include: wait for the blocker to clear and resume then (optionally coordinating with the sibling session that owns the blocker, e.g. via a cross-session message asking to be notified), or explicitly accept the partial verification as sufficient for now (their call, not this skill's).
+   5. Only proceed to steps 7/8 once the REAL verification has actually run and actually passed, or the operator has explicitly told you to proceed on the partial evidence.
 
    The `e2e-test-jira-ticket` skill enforces these rules internally (do not duplicate them here):
    - URL and deploy command are LOCKED for the run — the skill stops and asks the operator if either appears wrong.
    - Verification approach MAY be substituted mid-execution if the agreed approach demonstrably fails AND the alternate validates the same pass/fail intent. Both are documented in the report.
    - Production deployment is forbidden — the skill aborts before running any command that doesn't explicitly target stage.
    - Learnings are persisted ONLY when something genuinely new (and non-duplicate) was discovered.
-7. **QA Pass Jira comment (only on E2E pass — runs BEFORE Jira finalization)**: When the `e2e-test-jira-ticket` skill returned successfully (no `E2ETEST-Report.md` at project root) AND the operator did NOT opt out of E2E during planning, post a structured comment to the Jira ticket via `mcp__atlassian__addCommentToJiraIssue`:
+
+### Step 6-terraform. Atlantis plan/apply workflow (terraform repos only — replaces the Playwright E2E step above)
+
+Runs instead of step 6's E2E logic whenever `IS_TERRAFORM_REPO` is true. This is how a terraform repo gets verified in QA — Atlantis, not Playwright, is the tool that actually applies infrastructure changes, so this step drives Atlantis through plan → human-equivalent review → apply, and produces the same pass/fail signal (`<PROJECT_ROOT>/ATLANTIS-QA-Report.md`, analogous to `E2ETEST-Report.md`) that steps 7 and 8 below already check for.
+
+1. **Confirm the PR is out of draft.** Step 2c's terraform exception already ran `gh pr ready <PR_URL>` when the PR was created — if for any reason it's still showing as draft (e.g. that call failed silently), run `gh pr ready <PR_URL>` now before doing anything else. Atlantis's plan/apply comments need to land on a PR presented as ready for review, not one sitting in draft.
+
+2. **Post the QA plan comment:** `gh pr comment <PR_URL> --body "atlantis plan -p bg-qa"` (standalone Bash — no shell operators, no `&&`).
+
+3. **Wait for Atlantis to plan and comment back.** Run `sleep 120` (standalone, foreground Bash call) then check for a new comment from the `atlantis` bot: `gh pr view <PR_URL> --json comments`. If no Atlantis comment has landed yet, `sleep 60` and check again — up to 5 total checks (≈7 minutes). If nothing has appeared after that, this is the "QA verification cannot be completed — STOP and ask" case from Step 6 above, not an ordinary failure to silently record and move past: write `<PROJECT_ROOT>/ATLANTIS-QA-Report.md` noting "Atlantis never responded to `atlantis plan -p bg-qa` after ~7 minutes — check Atlantis's own logs/status; QA verification could not complete", then stop and ask the operator how to proceed (this often means something environmental is wrong — e.g. Atlantis itself down, or bg-qa/bg-prod locked by an unrelated PR — worth surfacing rather than assuming and retrying silently).
+
+4. **Read Atlantis's plan comment in full** once it lands — it contains the actual Terraform plan output (resources to add/change/destroy).
+
+5. **Review the plan for accuracy against this ticket's intended changes.** Compare what the plan shows to what this ticket actually set out to change (the plan/ticket description, the FEATURE GROUPING/TASK BREAKDOWN this run just implemented). Specifically look for:
+   - Any resource being destroyed or replaced that this ticket did NOT intend to touch.
+   - Any change outside this ticket's scope.
+   - A plan that errored out instead of producing a clean add/change/destroy summary.
+
+   - **Plan matches expectations cleanly** → proceed to sub-step 6 (apply).
+   - **Any discrepancy found** → do NOT apply. Write `<PROJECT_ROOT>/ATLANTIS-QA-Report.md` documenting exactly what was expected vs. what Atlantis's plan actually showed, and stop this step here — from steps 7/8's perspective this is the same as an E2E failure: no QA Pass comment, no Jira finalization, leave the ticket as-is for the operator to triage.
+
+6. **Apply in QA**, only once the plan checks out: `gh pr comment <PR_URL> --body "atlantis apply -p bg-qa"`. Wait for Atlantis's apply-result comment using the same poll pattern as sub-step 3 (`sleep 120`, then up to 5 checks 60s apart), then read it to confirm the apply actually **succeeded** — not merely that Atlantis acknowledged the comment.
+   - **Apply succeeded** → this repo's QA verification is complete. Do NOT write `ATLANTIS-QA-Report.md`. Continue to step 7 exactly as a passing E2E run would — the file's absence is what tells steps 7/8 "this passed."
+   - **Apply failed** → write `<PROJECT_ROOT>/ATLANTIS-QA-Report.md` with Atlantis's own apply-error output, and treat it as a failure the same way as sub-step 5's discrepancy case.
+
+**Production note — reminder only, NOT executed by this run.** `ticket-driver`'s own scope ends at QA; the eventual merge-to-main / production deploy is driven separately (`jira-sprint-manager` Rule C). The same Atlantis pattern applies there for production, and it's worth restating here since it's easy to get wrong: comment `atlantis plan -p bg-prod` on the relevant PR, wait for Atlantis's plan comment, review it for accuracy the same way as sub-step 5 above, and report any discrepancy. But **applying to production is never automatic** — commenting `atlantis apply -p bg-prod` requires the human operator's own explicit, in-the-moment authorization every time. No skill, agent, or automated rule (this one included) posts that comment on its own authority, no matter how clean the plan looks.
+
+7. **QA Pass Jira comment (only on QA verification pass — runs BEFORE Jira finalization)**: When step 6 (or 6-terraform) returned successfully — no `E2ETEST-Report.md` **and** no `ATLANTIS-QA-Report.md` at project root — AND the operator did NOT opt out of E2E during planning (this opt-out doesn't apply to `IS_TERRAFORM_REPO` runs, which never had an E2E option to opt out of), post a structured comment to the Jira ticket via `mcp__atlassian__addCommentToJiraIssue`:
 
    - **`cloudId`:** `ba2e3477-a4e5-4924-a530-47c471494d0f`
    - **`issueIdOrKey`:** the resolved Jira key (strip any `-TEST` / `-TEST-<N>` suffix from the ticket name)
    - **`contentFormat`:** `markdown`
-   - **`commentBody`:** structured per [qa-pass-comment-template.md](qa-pass-comment-template.md) — title is exactly `# QA Pass (Automated E2E Execution) ✅`.
+   - **`commentBody`:** structured per [qa-pass-comment-template.md](qa-pass-comment-template.md) — title is exactly `# QA Pass (Automated E2E Execution) ✅` for non-terraform runs. **For `IS_TERRAFORM_REPO` runs**, title it `# QA Pass (Atlantis Apply — bg-qa) ✅` instead and substitute the Atlantis plan-comment URL and apply-comment URL (step 6-terraform, sub-steps 4 and 6) for the dataLayer/screenshot evidence fields the template otherwise expects — there is no funnel or Playwright evidence for a terraform repo.
 
    **Skip conditions (skip this step if ANY is true):**
    - `<PROJECT_ROOT>/E2ETEST-Report.md` exists (E2E failed after 5 iterations) — there is no pass to celebrate.
-   - The operator opted out of E2E during planning (E2E Test Plan = "Skipped by operator.") — there is no automated proof to attach.
+   - `<PROJECT_ROOT>/ATLANTIS-QA-Report.md` exists (terraform repo — Atlantis's plan showed a discrepancy, the QA apply failed, or Atlantis never responded) — same reasoning, no pass to celebrate.
+   - The operator opted out of E2E during planning (E2E Test Plan = "Skipped by operator.") — there is no automated proof to attach. (Not applicable to `IS_TERRAFORM_REPO` runs.)
+   - Verification could not be completed at all due to an external/cross-repo blocker (see "QA verification cannot be completed — STOP and ask" above) — this is neither a pass nor a normal fail; do not post a QA Pass comment for it under any circumstances, including a relabeled or partial version of one.
 
    On skip, print one line: `"QA Pass comment skipped: <reason>."` and continue to step 8.
 
    Confirm to the operator on success: `"Posted QA Pass comment to <TICKET>: <comment URL>"`.
 
-8. **Jira finalization on success**: Run this step **only if** (a) the E2E test passed, OR (b) the operator skipped E2E during planning. **Skip this step entirely if** an `E2ETEST-Report.md` exists at the project root (E2E failed after 5 iterations) — leave the ticket as-is for the operator.
+8. **Jira finalization on success**: Run this step **only if** (a) the E2E test (or, for a terraform repo, the Atlantis QA workflow) actually ran and passed, OR (b) the operator skipped E2E during planning (non-terraform only — terraform repos always go through step 6-terraform, there's no opt-out), OR (c) verification was genuinely blocked and the operator explicitly told you to proceed anyway (per "QA verification cannot be completed — STOP and ask" above) — record that explicit instruction in the finalization notes/summary. **Skip this step entirely if** an `E2ETEST-Report.md` **or** an `ATLANTIS-QA-Report.md` exists at the project root (QA verification failed), **or** verification is blocked and the operator has not yet weighed in — leave the ticket as-is (do not transition, assign, log hours, or post the completion marker) until one of (a)/(b)/(c) is actually true.
 
    **Status guard (runs first) — branches on TODO-MODE, detected back at Standard-mode-workflow step 1:**
 
@@ -305,14 +383,14 @@ If a step is genuinely SKIPPED (e.g., E2E opted out during planning means the E2
    4. Format as `Xh Ym` (e.g., `2h 47m`). If hours is 0, drop the hours component (e.g., `34m`). Always include minutes even if 0.
 
    **Step 9b — Gather run-level metrics:**
-   - **Commit list** — `git -C <PROJECT_ROOT> log main..HEAD --oneline` (or whatever base branch the PR targets). Capture all commits introduced on this branch during this run; each row in the summary table is `<short SHA> | <one-line description>`. Group commits by phase if helpful (initial implementation / PR review fixes / Codex fixes / mid-E2E fixes).
+   - **Commit list** — `git -C <PROJECT_ROOT> log main..HEAD --oneline` (or whatever base branch the PR targets). Capture all commits introduced on this branch during this run; each row in the summary table is `<short SHA> | <one-line description>`. The initial-implementation portion is now one commit per FEATURE GROUPING entry (named per feature, from Step 2c) rather than a single combined commit — keep them as separate rows. Group everything after that by phase (Step 3/4 review-and-validation fixes / PR review fixes / Codex fixes / mid-E2E fixes).
    - **Test counts** — Use the counts from the most recent `CI=true npm test` run during the lint+test pass. The Jest summary line `Tests: N passed, M skipped, P total` is what you want. Capture per-project (`dynamic-app/` and `functions/`) when both ran. If the count was not retained in working memory (long run), re-run the test commands once before producing the summary; do NOT guess.
    - **New tests added (count)** — Count new `it(` / `test(` blocks in test files modified or created on this branch:
      ```
      git -C <PROJECT_ROOT> diff main..HEAD -- '*.test.ts' '*.test.tsx'
      ```
      Then count added lines starting with `+` that contain `it(`, `test(`, or `it.each(`. Approximate is fine; "+18 tests across 3 files" is more useful than "exact line count". If no test files were modified (rare for TDD-first), report "0".
-   - **Stage app version verified live** — The `Dynamic App Version: x.y.z` value the operator (or executor) read from the live page console after deploy. Skip this metric if E2E was opted-out.
+   - **Stage app version verified live** — The `Dynamic App Version: x.y.z` value the operator (or executor) read from the live page console after deploy. Skip this metric if E2E was opted-out. For `IS_TERRAFORM_REPO` runs, report "n/a — terraform repo, verified via `atlantis apply -p bg-qa` instead" and link the Atlantis apply-comment URL from step 6-terraform.
    - **Code review iteration counts** — Number of Cursor Bugbot findings + number of Codex findings addressed during the autonomous review loop. Sum per source. Pull from the iteration reports preserved by steps 3a, 4a, and 5a at `~/.claude/memory/ticket-reports/<TICKET>/pr-review/<TICKET>-PR-REVIEW-*.md` and `~/.claude/memory/ticket-reports/<TICKET>/codex-review/<TICKET>-CODEX-REVIEW-*.md` (Codex now has two passes — pre-clean at 3a + final at 5a — both folded into `CODEX_REVIEW_REPORT_PATHS`). The captured paths are available in `PR_REVIEW_REPORT_PATHS` and `CODEX_REVIEW_REPORT_PATHS`.
    - **New E2E learnings count** — Number of new entries appended to `~/.claude/memory/E2E/<projectDir>/learnings.md` during this run. The `e2e-test-jira-ticket` skill writes these conditionally; if it didn't write any (because nothing new was discovered), report "0".
 
@@ -321,7 +399,7 @@ If a step is genuinely SKIPPED (e.g., E2E opted out during planning means the E2
    ```markdown
    ## Ticket-driver complete — <TICKET>
 
-   **PR:** <PR URL>
+   **PR:** <PR URL> (draft — created on the first feature's commit; stays draft permanently — or, for a terraform repo, "ready for review — taken out of draft immediately after creation per the terraform exception")
    **Branch:** `<branch name>`
    **Total elapsed:** <Xh Ym>  (started <Y-m-d H:M> local · finished <Y-m-d H:M> local)
    **Stage app version verified live:** `<Dynamic App Version: x.y.z>` (or "n/a — E2E was skipped")
@@ -360,7 +438,7 @@ If a step is genuinely SKIPPED (e.g., E2E opted out during planning means the E2
    **Style rules for the summary:**
    - Use markdown headings (`##`, `###`) and tables — this is the LAST text the operator reads, treat it like a polished report.
    - Wrap all SHAs in single backticks; wrap branch/file paths in single backticks; wrap status keywords (`PASSED`, `SKIPPED`, etc.) in single backticks.
-   - Keep commit descriptions to a single line each (≤ ~110 chars). For initial-implementation commits, include scope; for fix commits, name the source ("Fix Cursor #2 — DRY refactor", "Fix Codex — applicationId regex").
+   - Keep commit descriptions to a single line each (≤ ~110 chars). For the per-feature implementation commits, name the feature (matches Step 2c's commit message); for fix commits, name the source ("Fix Cursor #2 — DRY refactor", "Fix Codex — applicationId regex").
    - The "Total elapsed" line is load-bearing — never omit it. If the timestamp file is missing for some reason (operator deleted it, or step 0 was skipped), report "Total elapsed: not captured (start timestamp missing)" rather than guess.
    - Do NOT recap every step of the workflow. The operator already saw progress along the way — the summary is for the at-a-glance view.
 

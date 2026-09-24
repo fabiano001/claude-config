@@ -1,0 +1,272 @@
+# ==============================================================================
+# ECS to EKS Migration Intake Template
+# ==============================================================================
+# Fill this template BEFORE generating any EKS migration artifacts.
+# Run validation: bash scripts/validate-migration-intake.sh <this-file.yaml>
+#
+# REQUIRED FIELDS are marked with (REQUIRED) - these MUST be non-empty.
+# Extracted fields are populated from AWS CLI extraction (ai-propose mode)
+# or manually (deterministic mode).
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# METADATA (SERVICE IDENTIFICATION)
+# ------------------------------------------------------------------------------
+# Core identification fields from Q0 gate
+#
+service_name: ""          # (REQUIRED) ECS service name (exact, case-sensitive) - e.g., api-node-payments
+cluster: ""               # (REQUIRED) ECS cluster: node10 | node-indexers
+profile: ""               # (REQUIRED) AWS profile: bg-qa | bg-prod
+region: "us-east-1"       # AWS region (default us-east-1)
+
+# Target EKS configuration
+target_namespace: ""      # (REQUIRED) EKS namespace - e.g., api-node
+target_environments:      # (REQUIRED) At least one environment
+  # - bg-qa
+  # - bg-prod
+
+# ------------------------------------------------------------------------------
+# INTAKE CONTROLS
+# ------------------------------------------------------------------------------
+intake_mode: "deterministic"  # (REQUIRED) enum: deterministic | ai-propose
+proposal_accepted: false      # (REQUIRED when ai-propose) must be true before proceeding
+
+# ------------------------------------------------------------------------------
+# EXTRACTED ECS FIELDS
+# ------------------------------------------------------------------------------
+# These fields are populated from AWS CLI extraction output.
+# In deterministic mode, fill these manually from known values.
+# In ai-propose mode, the agent populates these from extraction commands.
+#
+
+# --- Task Definition ---
+task_definition_arn: ""       # Full ARN from describe-services
+image_repository: ""          # Container image repository (without tag)
+image_tag: ""                 # Container image tag (immutable: semver + commit SHA)
+image_pull_policy: "IfNotPresent"  # Overlays pin an immutable tag -> IfNotPresent (avoids a
+                              # per-restart registry pull). Use Always ONLY for a mutable tag.
+ecs_cpu: ""                   # ECS CPU units (e.g., 256, 512, 1024)
+ecs_memory: ""                # ECS memory hard limit MiB (e.g., 512, 1024)
+ecs_memory_reservation: ""    # ECS memory soft limit MiB (memoryReservation)
+
+# --- Networking ---
+container_port: ""            # Primary container port
+health_check_path: ""         # Health check endpoint path (e.g., /health, /healthz)
+health_check_interval: ""     # Health check interval seconds
+health_check_timeout: ""      # Health check timeout seconds
+healthy_threshold: ""         # Healthy threshold count
+unhealthy_threshold: ""       # Unhealthy threshold count
+health_check_grace_period: "" # Initial delay seconds (from ECS service config)
+
+# --- Environment Variables ---
+# List non-sensitive environment variable names (values go in values.yaml)
+# ECS-specific vars (ECS_CONTAINER_METADATA_URI*, AWS_XRAY_DAEMON_ADDRESS) should be dropped
+env_vars:
+  # - PORT
+  # - AWS_REGION
+  # - NODE_ENV
+
+# --- SSM/Secrets Paths ---
+# SSM parameter paths referenced by the service (paths only, never values)
+# These determine the IRSA policy ssm:GetParameter* resource scope
+ssm_paths:
+  # - /bg/qa/api-node-payments/db-password
+  # - /bg/qa/api-node-payments/api-key
+
+# --- Task Role ---
+task_role_arn: ""             # Full ARN of the ECS task role
+task_role_name: ""            # Role name (with ecs/ path prefix)
+
+# IAM policy statements to include in XIRSARole (extracted from task role)
+# Format: list of statement objects with Effect, Action, Resource
+iam_policy_statements:
+  # - effect: Allow
+  #   actions:
+  #     - ssm:GetParameter
+  #     - ssm:GetParameters
+  #     - ssm:GetParametersByPath
+  #   resources:
+  #     - "arn:aws:ssm:us-east-1:AWS_ACCOUNT_ID:parameter/bg/qa/api-node-payments/*"
+
+# --- Replicas and Scaling ---
+desired_count: ""             # ECS service desiredCount
+scaling_enabled: false        # Whether auto-scaling is configured
+scaling_min_capacity: ""      # MinCapacity from scalable-targets
+scaling_max_capacity: ""      # MaxCapacity from scalable-targets
+scaling_cpu_target: ""        # CPU target tracking percentage (if applicable)
+scaling_memory_target: ""     # Memory target tracking percentage (if applicable)
+scaling_type: ""              # target-tracking | step | none
+
+# --- ALB/Load Balancer ---
+has_load_balancer: false      # Whether ALB is attached
+target_group_arn: ""          # Target group ARN (if ALB attached)
+alb_arn: ""                   # ALB ARN (if ALB attached)
+
+# --- Listener Rules (DEVOPS-5598) ---
+# Count rules by category for listener-rule-heavy services
+listener_rule_count: 0        # Total number of ALB listener rules
+listener_rules_redirect: 0    # Count of redirect rules
+listener_rules_forward: 0     # Count of forward rules
+listener_rules_lambda: 0      # Count of lambda target rules
+listener_rules_default: 0     # Count of default catch-all rules
+
+# --- Sidecars ---
+# List of sidecar container names detected in task definition
+# Known sidecars (xray-daemon, datadog-agent, etc.) are auto-dropped
+# Unknown sidecars flag the migration as supported-with-prompts
+sidecars_detected:
+  # - xray-daemon
+  # - unknown-sidecar
+
+sidecars_to_drop:
+  # - xray-daemon
+  # - datadog-agent
+
+sidecars_unknown:
+  # - custom-log-router
+
+# ------------------------------------------------------------------------------
+# MAPPING OUTPUTS
+# ------------------------------------------------------------------------------
+# These fields represent the mapped EKS configuration derived from extracted values.
+#
+
+# --- Service Family ---
+# Which Helm chart template will be used
+# Determines the base chart in helm-charts/charts/
+service_family: ""            # (REQUIRED) enum: api-node | portal-react | webapp-react | webapp-node | other
+chart_template: ""            # Chart path in helm-charts (e.g., helm-charts/charts/api-node-template)
+
+# --- Namespace and Grouping ---
+eks_namespace: ""             # Final EKS namespace (usually same as target_namespace)
+appset_group: ""              # ApplicationSet group (e.g., app-workloads, data-services)
+argocd_project: ""            # ArgoCD project (e.g., app-workloads)
+
+# --- Mapped Resources ---
+# K8s resource values derived from ECS extraction using mapping rules
+k8s_cpu_request: ""           # e.g., 256m (from ecs_cpu)
+k8s_cpu_limit: ""             # e.g., 512m (optional, often omitted)
+k8s_memory_request: ""        # e.g., 256Mi (from ecs_memory_reservation)
+k8s_memory_limit: ""          # e.g., 512Mi (from ecs_memory)
+
+# --- ElastiCache / Parameter-Store Cache Endpoint ---
+# REQUIRED for api-node services. They load config via
+# @dmm/lib-node-parameter-store-cache (often a TRANSITIVE dep in package-lock.json),
+# which reads the memcached endpoint from ELASTICACHE_HOST/PORT at startup. The
+# clean-base image does not bake these in — omitting them crash-loops the pod at
+# config init (ERR_MISSING_ARGS). These render into each overlay's api.env.
+# Confirm from SSM /configd/elasticache/server/{host,port} per account.
+elasticache_required: false   # Set true for api-node services (treat as required for the family)
+elasticache_host: ""          # e.g., shared-api-memcached.qa.bgrp.io (qa) / shared-api-memcached.prod.bgrp.io (prod)
+elasticache_port: "11211"     # ElastiCache/memcached port (string)
+elasticache_ttl: ""           # Optional — only if the source ECS task def set ELASTICACHE_TTL (e.g., "15")
+
+# --- HPA Configuration (if scaling enabled) ---
+# Production AZ floor: bg-prod spans 3 AZs, so hpa_min_replicas >= 3 and
+# hpa_max_replicas must be a multiple of 3 (e.g. 3 -> 6). Never reduce below the
+# ECS MinCapacity; only raise to the AZ floor. bg-qa keeps max(2, MinCapacity)/MaxCapacity.
+# Do NOT blindly mirror the ECS CPU TargetValue: if 7d Average CPU is well below it
+# (avg < target/2), set hpa_cpu_target: 70 for bg-prod so the HPA does not pin to max.
+# See migrate-ecs-service/deterministic-mapping-rules.md (Production AZ-aware HPA sizing,
+# CPU target sanity).
+hpa_enabled: false            # Whether to enable HPA
+hpa_min_replicas: ""          # bg-prod: max(3, scaling_min_capacity); bg-qa: max(2, scaling_min_capacity)
+hpa_max_replicas: ""          # bg-prod: multiple of 3 >= max(scaling_max_capacity, hpa_min_replicas*2); bg-qa: scaling_max_capacity
+hpa_cpu_target: ""            # ECS scaling_cpu_target, OR 70 for bg-prod when avg CPU is low/bursty
+hpa_memory_target: ""         # From scaling_memory_target
+
+# --- Operational Hardening (derived from ECS config + ecosystem conventions) ---
+# These fields ensure the migrated service follows EKS HA best practices.
+# When desired_count >= 2 or hpa_enabled=true, anti-affinity and PDB are REQUIRED.
+#
+anti_affinity: ""                    # REQUIRED when desired_count >= 2 OR hpa_enabled=true. Enum: soft-hostname | hard-hostname | none
+                                     # NOTE: "soft-hostname" emits TWO preferred terms in values:
+                                     # topology.kubernetes.io/zone (weight 100, AZ spread) +
+                                     # kubernetes.io/hostname (weight 50, node spread). The zone
+                                     # term is required for the AZ-balance/min-replicas intent to hold.
+pdb_max_unavailable: ""              # REQUIRED when desired_count >= 2. e.g., "1"
+deployment_strategy: ""              # e.g., "RollingUpdate" | "Recreate" — default RollingUpdate when desired_count >= 2
+deployment_strategy_max_surge: ""    # e.g., "1" — when strategy=RollingUpdate
+deployment_strategy_max_unavail: ""  # e.g., "0" — when strategy=RollingUpdate
+graceful_shutdown_seconds: ""        # terminationGracePeriodSeconds — mapped from ECS deregistration delay
+
+# --- Gateway Configuration (if ALB attached) ---
+gateway_enabled: false        # Whether to enable Gateway API HTTPRoute
+gateway_hostname: ""          # e.g., api-node-payments.qa.svc.bgrp.io
+
+# ------------------------------------------------------------------------------
+# COMPATIBILITY CLASSIFICATION
+# ------------------------------------------------------------------------------
+# Classification determines whether migration can proceed automatically
+#
+compatibility_classification: ""  # (REQUIRED) enum: fully-compatible | supported-with-prompts | manual-required
+
+# Blockers requiring human intervention
+# If any blockers exist with status=open, migration cannot proceed
+blockers:
+  # - type: efs-volume
+  #   description: "Service uses EFS mount at /data"
+  #   status: open  # open | resolved | escalated
+  #   resolution: ""
+  # - type: unknown-sidecar
+  #   description: "Unknown sidecar container: custom-metrics-agent"
+  #   status: open
+  #   resolution: ""
+
+# Hybrid fields flagged for review
+# These were extracted but require human confirmation
+hybrid_fields:
+  # - field: iam_policy_statements
+  #   concern: "Contains Resource: * - needs narrowing"
+  #   reviewed: false
+  # - field: entry_point
+  #   concern: "Custom entrypoint may need command override in Deployment"
+  #   reviewed: false
+
+# ------------------------------------------------------------------------------
+# VALIDATION GATE BOOLEANS
+# ------------------------------------------------------------------------------
+# These booleans prove you completed verification steps.
+# Set each to true ONLY after completing the corresponding check.
+#
+extraction_completed: false       # (REQUIRED true) All AWS CLI extraction commands run
+mapping_applied: false            # (REQUIRED true) Mapping rules applied to extracted values
+classification_completed: false   # (REQUIRED true) Compatibility classification determined
+hybrid_fields_reviewed: false     # (REQUIRED true) All hybrid fields reviewed by human
+blockers_resolved: false          # (REQUIRED true) No open blockers (or --allow-blockers flag used)
+
+# ------------------------------------------------------------------------------
+# AI-PROPOSE MODE: PROPOSAL METADATA (Optional)
+# ------------------------------------------------------------------------------
+# Populated when intake_mode=ai-propose to track proposal state
+#
+proposal_timestamp: ""        # ISO 8601 timestamp when proposal was generated
+proposal_confidence: ""       # Overall confidence: HIGH | MEDIUM | LOW
+proposal_notes: ""            # Any notes from the proposing agent
+
+# ==============================================================================
+# VALIDATION
+# ==============================================================================
+# After filling this template, validate it:
+#
+#   # Basic validation (required fields + gate booleans)
+#   bash scripts/validate-migration-intake.sh /path/to/this-file.yaml
+#
+#   # With --allow-blockers flag (if blockers are documented but proceeding anyway)
+#   bash scripts/validate-migration-intake.sh /path/to/this-file.yaml --allow-blockers
+#
+# The validator enforces:
+#   - All required fields non-empty
+#   - intake_mode in {deterministic, ai-propose}
+#   - If ai-propose: proposal_accepted must be true
+#   - service_family in {api-node, portal-react, webapp-react, webapp-node, other}
+#   - compatibility_classification in {fully-compatible, supported-with-prompts, manual-required}
+#   - cluster in {node10, node-indexers}
+#   - profile in {bg-qa, bg-prod}
+#   - All gate booleans must be true
+#   - No open blockers (unless --allow-blockers)
+#
+# The migration-parity validator additionally enforces (against generated overlays):
+#   - PARITY-CACHE-001: api-node overlays set ELASTICACHE_HOST/PORT in api.env
+#
+# ==============================================================================

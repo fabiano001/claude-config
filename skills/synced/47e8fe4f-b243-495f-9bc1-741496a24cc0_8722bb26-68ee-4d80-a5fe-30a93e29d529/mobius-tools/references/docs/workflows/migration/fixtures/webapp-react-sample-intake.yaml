@@ -1,0 +1,125 @@
+service_name: "webapp-react-mls-soldboats"
+cluster: "node10"
+profile: "bg-qa"
+region: "us-east-1"
+
+target_namespace: "apps"
+target_environments:
+  - bg-qa
+  - bg-prod
+
+intake_mode: "deterministic"
+proposal_accepted: false
+
+task_definition_arn: "arn:aws:ecs:us-east-1:123456789012:task-definition/node10-webapp-react-mls-soldboats:11"
+image_repository: "123456789012.dkr.ecr.us-east-1.amazonaws.com/webapp-react-mls-soldboats"
+image_tag: "1.0.0"
+ecs_cpu: "512"
+ecs_memory: "1024"
+ecs_memory_reservation: "512"
+
+container_port: "80"
+health_check_path: "/healthcheck"
+health_check_interval: "15"
+health_check_timeout: "5"
+healthy_threshold: "2"
+unhealthy_threshold: "6"
+health_check_grace_period: "30"
+
+env_vars:
+  - PM2_MAX_OLD_SPACE_SIZE
+
+ssm_paths:
+  - /configd/webapp-react-mls-soldboats/*
+
+task_role_arn: "arn:aws:iam::123456789012:role/ecs/node10-webapp-react-mls-soldboats"
+task_role_name: "ecs/node10-webapp-react-mls-soldboats"
+
+iam_policy_statements:
+  - effect: Allow
+    actions:
+      - xray:PutTraceSegments
+      - xray:PutTelemetryRecords
+      - xray:GetSamplingRules
+      - xray:GetSamplingTargets
+      - xray:GetSamplingStatisticSummaries
+    resources:
+      - "*"
+  - effect: Allow
+    actions:
+      - ssm:GetParameter
+      - ssm:GetParameters
+      - ssm:GetParametersByPath
+    resources:
+      - "arn:aws:ssm:us-east-1:AWS_ACCOUNT_ID:parameter/configd/webapp-react-mls-soldboats/*"
+
+desired_count: "2"
+anti_affinity: "soft-hostname"
+pdb_max_unavailable: "1"
+deployment_strategy: "RollingUpdate"
+scaling_enabled: true
+scaling_min_capacity: "2"
+scaling_max_capacity: "5"
+scaling_cpu_target: "60"
+scaling_memory_target: ""
+scaling_type: "target-tracking"
+
+has_load_balancer: true
+target_group_arn: "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/webapp-react-mls-soldboats/abcdef"
+alb_arn: "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/node10-alb/123456"
+
+listener_rule_count: 5
+listener_rules_redirect: 0
+listener_rules_forward: 5
+listener_rules_lambda: 0
+listener_rules_default: 0
+
+sidecars_detected:
+  - nginx
+  - xray
+
+sidecars_to_drop:
+  - xray
+
+sidecars_unknown:
+  - nginx
+
+service_family: "webapp-react"
+chart_template: "helm-charts/charts/webapp-react-template"
+
+eks_namespace: "apps"
+appset_group: "workloads"
+argocd_project: "workloads"
+
+k8s_cpu_request: "512m"
+k8s_cpu_limit: "1000m"
+k8s_memory_request: "512Mi"
+k8s_memory_limit: "1024Mi"
+
+hpa_enabled: true
+hpa_min_replicas: "2"
+hpa_max_replicas: "5"
+hpa_cpu_target: "60"
+hpa_memory_target: ""
+
+gateway_enabled: true
+gateway_hostname: "react-mls-soldboats.qa.bgrp.io"
+
+compatibility_classification: "supported-with-prompts"
+
+blockers: []
+
+hybrid_fields:
+  - field: sidecars_unknown
+    concern: "nginx sidecar is essential in ECS task definition; chart is single-container"
+    reviewed: true
+
+extraction_completed: true
+mapping_applied: true
+classification_completed: true
+hybrid_fields_reviewed: true
+blockers_resolved: true
+
+proposal_timestamp: ""
+proposal_confidence: ""
+proposal_notes: ""

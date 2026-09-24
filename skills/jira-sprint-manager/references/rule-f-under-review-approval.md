@@ -10,15 +10,20 @@ Rule F evaluates each Under-Review ticket independently. Tickets Rule E just tra
 
 ## Per-ticket handling
 
+0. **Universal flag gate (runs first, before anything else, for every ticket including one reached via the Rule E → Rule F chain).** Check `fields.customfield_10091` (see SKILL.md Step 2 for the pinned field id and the 2026-05-20 incident — never use the short name `flagged`). If non-empty, this ticket is a complete no-op for Rule F this run: do not call `gh`, do not transition anything. Append exactly one `REMINDERS` entry: `"<TICKET-KEY> is flagged (impediment) — Rule F made no changes, actions, or transitions. Clear the flag or unblock the impediment before next run if it's now actionable."` Then move on to the next Under-Review ticket. This applies even to a chained ticket — re-check the flag on it; do not assume Rule E already verified it.
+
 1. **Determine the target repo.** Match the ticket's `description` + `summary` text (case-insensitive) against the known-repo list from Rule D step 4:
    - `portal-react-boattrader`
+   - `portal-nextjs-platform`
    - `webapp-react-trident`
    - `api-node-boats`
    - `api-node-boattrader`
+   - `boatsdotcom`
    - `lambda-node-trident-700credit`
    - `lambda-node-trident-advertised-rates`
    - `lambda-node-trident-portal-lead`
    - `lambda-node-trident-partner-lender`
+   - `lambda-node-trident-services`
    - `pp-algorithm`
    - `configd`
    - `terraform-stack-trident`

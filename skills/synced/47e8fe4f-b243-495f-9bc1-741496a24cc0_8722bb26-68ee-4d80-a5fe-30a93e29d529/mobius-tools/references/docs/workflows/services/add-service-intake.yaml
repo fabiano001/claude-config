@@ -1,0 +1,247 @@
+# ==============================================================================
+# Add Service Intake Template
+# ==============================================================================
+# Fill this template BEFORE generating any service files.
+# Run validation: bash scripts/validate-add-service-intake.sh <this-file.yaml>
+#
+# REQUIRED FIELDS are marked with (REQUIRED) - these MUST be non-empty.
+# Optional fields can be left empty or filled as needed.
+#
+# AI-RESEARCH CONVENTION:
+#   Any field in Section B can be set to "ai-research" to have the LLM
+#   investigate and propose the correct value with evidence. This works
+#   independently of intake_mode — even in deterministic mode, you can
+#   selectively ask for help on questions you're unsure about.
+#
+#   When the LLM resolves an "ai-research" field, it will:
+#     1. Run the appropriate verification command for that field
+#     2. Propose a value with evidence
+#     3. Mark the value with (Recommended) in the summary table
+#     4. Wait for your confirmation before proceeding
+#
+# ==============================================================================
+
+
+# ╔════════════════════════════════════════════════════════════════════════════╗
+# ║  SECTION A — YOU FILL THESE (required to start)                          ║
+# ╚════════════════════════════════════════════════════════════════════════════╝
+
+# --- Intake Mode ---
+intake_mode: "deterministic"  # (REQUIRED) deterministic | ai-propose
+proposal_accepted: false      # (REQUIRED when ai-propose) must be true before proceeding
+
+# --- Service Repo (Q0 — answer first) ---
+# Which repository will host argocd/<addon>/overlays/<env>/config.yaml?
+# Default: use the current working repo if it has an argocd/ directory.
+#   - https://github.com/boatsgroup/iac-eks-addons         (devops/platform team only — cluster-wide addons)
+#   - https://github.com/boatsgroup/iac-eks-observability  (devops/platform team only — monitoring stack)
+#   - https://github.com/boatsgroup/helm-charts            (shared charts)
+#   - https://github.com/boatsgroup/<your-service-repo>    (application team repos)
+#
+service_repo_url: ""          # (REQUIRED) Q0 answer
+
+# --- What are you deploying? ---
+addon: ""                     # (REQUIRED) kebab-case name — e.g., cert-manager
+namespace: ""                 # (REQUIRED) target namespace — e.g., cert-manager
+
+# --- Namespace ownership ---
+# dedicated:  This addon owns the namespace (CreateNamespace=true)
+# shared:     Namespace is shared with other addons (CreateNamespace=false)
+# bootstrap:  Must exist before ArgoCD (kube-system, argocd, crossplane-system)
+#
+namespace_strategy: "dedicated"  # (REQUIRED) dedicated | shared | bootstrap | ai-research
+
+# --- ArgoCD project ---
+argocd_project: ""            # (REQUIRED) e.g., core-infrastructure, monitoring
+
+# --- Helm chart source ---
+helm_repo_url: ""             # (REQUIRED) e.g., https://charts.jetstack.io
+helm_chart: ""                # (REQUIRED) e.g., cert-manager
+helm_version: ""              # (REQUIRED) exact version — e.g., v1.14.5 (never "latest")
+
+# --- Image override (most addons use chart defaults) ---
+image_strategy: "default"     # (REQUIRED) default | override
+image_repository: ""          # (REQUIRED when override) e.g., registry.example.com/img
+image_tag: ""                 # (when override) pinned tag — never "latest"
+image_digest: ""              # (when override) sha256 digest — preferred over tag
+image_values_path: ""         # (REQUIRED when override) e.g., image.repository
+
+# --- Target environments ---
+environments:                 # (REQUIRED) at least one
+  # - bg-qa
+  # - bg-prod
+  # - ops-qa
+  # - ops-prod
+
+# --- AWS resources ---
+# none:         No AWS resources needed
+# irsa-only:    Just an IAM role (most common)
+# irsa-and-xrd: [legacy] IAM role + self-service resource (S3, SQS, etc.) via Crossplane claims
+# xrd-only:     [legacy] Self-service resource without IRSA (rare)
+# crossplane:   IAM role (always XIRSARole) + other resources via Crossplane XRD claims
+# terraform:    IAM role (always XIRSARole) + other resources via generated Terraform
+#               (module-first against the terraform-modules-aws registry) in terraform/
+#
+# Rule: IRSA is ALWAYS XIRSARole, regardless of which of the above is picked
+#       (except "none", which needs no AWS access at all). crossplane vs.
+#       terraform is a whole-stack choice for the non-IRSA resources only —
+#       never mix XRD claims and generated Terraform for the same service.
+#       This per-service `terraform/` generation is unrelated to shared
+#       platform infra (RDS, ElastiCache) provisioned via Terraform/Terragrunt
+#       in terraform-module-core-irsa/terraform-stack-* repos.
+#
+aws_resources: "ai-research"  # (REQUIRED) none | irsa-only | crossplane | terraform | ai-research
+
+# --- ApplicationSet ---
+appset_exists: false          # true if ApplicationSet already exists
+appset_name: ""               # (Optional) if different from addon name
+expected_generator_path: ""   # (Optional) default: argocd/<addon>/overlays/*/config.yaml
+
+
+# ╔════════════════════════════════════════════════════════════════════════════╗
+# ║  SECTION B — LLM RESEARCHES, YOU CONFIRM                                ║
+# ╠════════════════════════════════════════════════════════════════════════════╣
+# ║  The LLM fills these using your Section A inputs. Review each value.     ║
+# ║  Override anything you disagree with.                                    ║
+# ║  Any field can also be filled manually if you already know the answer.   ║
+# ╚════════════════════════════════════════════════════════════════════════════╝
+
+# --- Chart Characteristics ---
+# LLM inspects the chart using helm template and helm show values.
+#
+chart_installs_crds: false          # true | false | ai-research — Does the chart install CRDs?
+chart_uses_hooks: false             # true | false | ai-research — Does the chart use Helm hooks?
+probes_in_chart: false              # true | false | ai-research — Does the chart configure health probes?
+startup_time_estimate: ""           # seconds (e.g., "15") | ai-research — Cold-start time estimate
+chart_creates_sa: false             # true | false | ai-research — Does the chart create a ServiceAccount?
+chart_sa_name: ""                   # SA name from chart | ai-research — Must match IRSA SA name
+controller_mutates_resources: false # true | false | ai-research — Does the controller write to its own resources?
+ignore_differences_notes: ""        # Which fields drift | ai-research — e.g., "HPA mutates spec.replicas"
+
+# --- AWS Resources Detail (when aws_resources is not "none") ---
+irsa_service_account_name: ""       # (when irsa) Must match chart_sa_name | ai-research
+irsa_namespace: ""                  # (when irsa) Usually same as namespace | ai-research
+irsa_policy_arns: []                # Managed IAM policy ARNs | ai-research
+  # - "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+xrd_claims: []                      # Additional XRD claims beyond XIRSARole
+  # - kind: "XS3Bucket"
+  #   name: "my-addon-data"
+  #   xrd_exists: true              # false -> STOP: run /mobius:new-xrd first
+shared_infra_notes: ""              # If shared infra needed, note the Terraform/Jira ticket
+
+# --- Declared Dependencies (brand-new / codeless scaffold only) ---
+# Populated by add-service/dependency-intake.md when there's no real code to
+# scan. Each boatsgroup lib is characterized (add-service/dependency-characterization.md)
+# into what it does + which usage role this service plays, and the role-derived
+# IAM actions seed aws_resources. Onboarded-from-intent, not observed code —
+# re-check via /mobius:update-service once real code lands.
+service_dependencies:
+  # Each entry is either a bare repo name (string, back-compat) or a
+  # characterization record. A lib can carry more than one role axis (its own,
+  # plus any folded in from deeper boatsgroup libs), so role_axes is a list.
+  # Records look like:
+  #   - repo: lib-message-bus
+  #     does: "SQS-backed message-bus client"
+  #     aws_services: ["sqs"]
+  #     role_axes:                       # zero or more; each gets its own chosen_role
+  #       - aws_service: sqs             # which AWS service this axis governs (C2 scopes axes per service)
+  #         axis: producer-consumer      # or reader-writer, publisher-subscriber, ...
+  #         chosen_role: consumer        # the role THIS service plays
+  #         via: null                    # or "lib-message-bus -> lib-aws-core" if inherited through a deeper lib
+  #     fixed_actions: []                # axis-less actions that always apply (e.g. a single-footprint deeper lib); each entry carries aws_service
+  #     unresolved: []                   # aws_services still "NEEDS USER INPUT" — opaque services AND axes left unanswered; must be empty before `looks good`
+  #     derived_actions:                 # per-service, ALREADY reconciled by C4 — the set callers apply verbatim (not recomputed from role_axes)
+  #       sqs: ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
+  boatsgroup_libs: []               # internal shared libs/repos this service will import/call (e.g. lib-node-s3)
+  external_modules: []              # third-party npm/pip/go packages implying AWS (e.g. @aws-sdk/client-s3)
+  boatsgroup_services: []           # other boatsgroup services this one calls at runtime (network/gateway context)
+
+# --- Operational Hardening ---
+# LLM proposes based on addon classification and chart inspection.
+#
+addon_class: ""                     # critical-infrastructure | workload-supporting | daemonset | ai-research
+priority_class: ""                  # system-cluster-critical | system-node-critical | "" | ai-research
+node_selector: ""                   # e.g., "{ nodepool: bootstrap }" | ai-research
+tolerations: ""                     # e.g., "[{key: workload, ...}]" | ai-research
+replicas: ""                        # e.g., "2" | ai-research
+uses_hpa: false                     # true | false | ai-research — If true, do NOT set replicas
+pdb_max_unavailable: ""             # e.g., "1" | ai-research — REQUIRED when replicas >= 2
+anti_affinity: ""                   # e.g., "soft-hostname" | ai-research — REQUIRED when replicas >= 2 OR uses_hpa=true. Enum: soft-hostname | hard-hostname | none | custom
+topology_spread_enabled: false      # true | false | ai-research — Multi-AZ resilience
+topology_spread_max_skew: ""        # e.g., "1" | ai-research
+deployment_strategy: ""             # e.g., "RollingUpdate" | ai-research — REQUIRED when replicas >= 2. Enum: RollingUpdate | Recreate
+deployment_strategy_max_surge: ""   # e.g., "1" | ai-research — when strategy=RollingUpdate
+deployment_strategy_max_unavail: "" # e.g., "0" | ai-research — when strategy=RollingUpdate
+termination_grace_period: ""        # seconds (e.g., "60") | ai-research — Leave empty for chart default
+affinity_values_paths: []           # (Optional) YAML paths for multi-component affinity — e.g., ["webhook.affinity", "controller.affinity"]
+affinity_match_labels: ""           # (Optional) Custom label selector — default: { app.kubernetes.io/name: <addon> }
+resources_requests_cpu: ""          # e.g., "100m" | ai-research
+resources_requests_memory: ""       # e.g., "128Mi" | ai-research
+resources_limits_cpu: ""            # e.g., "500m" | ai-research
+resources_limits_memory: ""         # e.g., "512Mi" | ai-research
+scheduling_validated: false         # true | false | ai-research — nodeSelector matches a NodePool
+service_monitor_base: ""            # e.g., "false" | ai-research
+service_monitor_overlay: ""         # e.g., "true" | ai-research
+service_monitor_labels: ""          # e.g., "{ release: monitoring }" | ai-research
+
+
+# ╔════════════════════════════════════════════════════════════════════════════╗
+# ║  SECTION C — VERIFICATION GATES (all must be true)                       ║
+# ╠════════════════════════════════════════════════════════════════════════════╣
+# ║  Set to true ONLY after the check passes. The /mobius:add-service command ║
+# ║  runs these automatically. Shell script also available for manual use.   ║
+# ╚════════════════════════════════════════════════════════════════════════════╝
+
+# Original gates (V1-V4)
+chart_version_verified: false       # helm show chart ... --version <ver> succeeded
+values_schema_verified: false       # helm show values ... --version <ver> reviewed
+image_version_verified: false       # Image defaults or override config confirmed
+kustomize_api_verified: false       # kustomize build --enable-helm succeeded
+
+# New gates
+probes_health_verified: false       # Probes exist and ports/paths match config
+sa_name_match_verified: false       # (when irsa) chart SA name matches irsa_service_account_name
+crds_impact_verified: false         # (when CRDs) SSA + preserveResourcesOnDeletion confirmed
+xrd_exists_verified: false          # (when xrd_claims) all referenced XRDs exist
+
+
+# ╔════════════════════════════════════════════════════════════════════════════╗
+# ║  SECTION D — AI-PROPOSE FIELDS (only when intake_mode=ai-propose)        ║
+# ╚════════════════════════════════════════════════════════════════════════════╝
+
+proposed_service_repo_url: ""
+proposed_argocd_project: ""
+proposed_helm_repo_url: ""
+proposed_helm_chart: ""
+proposed_helm_version: ""
+proposal_confidence: ""             # HIGH | MEDIUM | LOW
+proposal_evidence: ""
+
+
+# ==============================================================================
+# VALIDATION
+# ==============================================================================
+# The /mobius:add-service command runs validation automatically.
+# For manual use:
+#
+#   # Basic validation (required fields + verification gates)
+#   bash scripts/validate-add-service-intake.sh /path/to/this-file.yaml
+#
+#   # With ApplicationSet cross-check (if appset exists)
+#   bash scripts/validate-add-service-intake.sh /path/to/this-file.yaml \
+#     ../iac-eks-argocd/applicationsets/core-infrastructure/<addon>.yaml
+#
+# The validator enforces:
+#   - All required fields non-empty
+#   - intake_mode in {deterministic, ai-propose}
+#   - image_strategy in {default, override}
+#   - aws_resources in {none, irsa-only, irsa-and-xrd, xrd-only}
+#   - namespace_strategy in {dedicated, shared, bootstrap}
+#   - If ai-propose: proposal_accepted must be true
+#   - If override: image_repository and image_values_path required
+#   - If irsa: irsa_service_account_name matches chart_sa_name
+#   - All verification booleans must be true
+#   - helm_version cannot be "latest" or empty
+#   - image_tag cannot be "latest" (use pinned tag or digest)
+#
+# ==============================================================================

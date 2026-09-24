@@ -1,0 +1,55 @@
+# =============================================================================
+# New Hub Intake Template
+# =============================================================================
+# Copy this file and fill in all required fields before running the validator.
+#
+# Usage:
+#   cp ../mobius-tools/docs/workflows/hub/new-hub-intake.yaml /tmp/<hub>-intake.yaml
+#   # Fill in all fields
+#   bash ../mobius-tools/scripts/validate-new-hub-intake.sh /tmp/<hub>-intake.yaml
+# =============================================================================
+
+# --- Intake Mode ---
+# deterministic: You provide all values directly
+# ai-propose: AI researches and proposes values for your approval
+intake_mode: ""  # deterministic | ai-propose
+
+# --- AI-Propose Tracking ---
+proposal_accepted: false  # Set to true after accepting AI recommendations
+
+# --- Hub Identity ---
+hub_name: ""              # Kebab-case, e.g., "ops-staging"
+aws_account_id: ""        # 12-digit AWS account ID, e.g., "123456789012"
+aws_region: ""            # AWS region, e.g., "us-east-1"
+
+# --- Network & DNS ---
+dns_zone: ""              # Delegated DNS zone, e.g., "staging.ops.bgrp.io"
+argocd_hostname: ""       # ArgoCD ingress hostname, e.g., "argo.staging.ops.bgrp.io"
+acm_certificate_arn: ""   # ACM cert ARN for the hostname (created in terragrunt)
+
+# --- EKS Cluster ---
+cluster_name: ""          # Usually same as hub_name, e.g., "ops-staging"
+eks_version: ""           # EKS Kubernetes version (match existing hubs, currently 1.33)
+
+# --- IRSA ---
+argocd_hub_role_arn: ""   # Hub IRSA role ARN (created in terragrunt)
+                          # Pattern: arn:aws:iam::<account>:role/<hub>-argocd-hub
+
+# --- Spoke Clusters (initial) ---
+# List of spoke clusters this hub will manage at creation time.
+# Spokes can be added later via /mobius:new-spoke
+initial_spokes: []        # e.g., ["bg-staging"]
+
+# --- Terragrunt ---
+terragrunt_account_dir: ""  # e.g., "ops-staging" (under aws/accounts/)
+
+# --- Monitoring ---
+monitoring_required: false  # Whether to create terraform-stack-monitoring-ng environment
+
+# --- Verification Booleans (Must All Be True) ---
+# Set each to true only after confirming the check manually
+aws_account_exists: false           # AWS account exists and is accessible
+dns_zone_delegated: false           # DNS zone delegation is configured
+eks_cluster_created: false          # EKS cluster provisioned via terragrunt
+irsa_roles_created: false           # Core IRSA roles created via terragrunt
+github_app_secret_exists: false     # GitHub App credentials in AWS Secrets Manager

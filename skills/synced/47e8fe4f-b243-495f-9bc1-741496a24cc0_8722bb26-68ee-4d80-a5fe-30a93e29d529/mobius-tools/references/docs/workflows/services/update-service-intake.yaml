@@ -1,0 +1,42 @@
+# update-service intake
+# Fill this before running /mobius:update-service generation.
+# Validate with: npx mobius-validate-wiring update-service <service> --service-repo <path>
+#
+# update-service modifies an ALREADY-ONBOARDED service. If the service isn't
+# onboarded yet, use add-service instead.
+
+# ── Target service (REQUIRED) ────────────────────────────────────────────────
+service_name: ""            # (REQUIRED) the addon/service to modify (must already exist)
+service_repo: ""            # (REQUIRED) path or repo of the onboarded service (under workspace_dir, or the current dir)
+
+# ── Mode (REQUIRED) ──────────────────────────────────────────────────────────
+# One of: add-resource | bump-chart | add-environment
+# You may run more than one in sequence; fill only the block(s) you need.
+mode: ""
+
+# ── add-resource ─────────────────────────────────────────────────────────────
+# Add an AWS resource and/or IAM actions to the existing service. IRSA is always
+# the service's Crossplane XIRSARole claim. Match the service's existing mode
+# (crossplane vs terraform) unless explicitly migrating.
+add_resource:
+  aws_resources: []         # e.g. ["S3 bucket for uploads", "SQS queue"] — or [] if only adding IAM actions
+  iam_actions: {}           # per-resource IAM actions; confirm-not-guess (e.g. { s3: ["s3:GetObject","s3:PutObject"] })
+  resource_mode: ""         # crossplane | terraform — must match the service's existing non-IRSA mode
+  xrd_claims: []            # (crossplane mode) new XRD claims to add; each needs xrd_exists: true (else run /mobius:new-xrd)
+  terraform_resources: []   # (terraform mode) resource types to add via terraform-modules-aws (module-first)
+
+# ── bump-chart ───────────────────────────────────────────────────────────────
+bump_chart:
+  from_version: ""          # current pinned version (recorded for the from -> to commit message)
+  to_version: ""            # target pinned version (NEVER "latest")
+  breaking_changes_reviewed: false  # set true after reviewing CRD/values-schema deltas between versions
+
+# ── add-environment ──────────────────────────────────────────────────────────
+add_environment:
+  new_env: ""               # e.g. ops-prod — must be a known platform environment
+  model_on_env: ""          # existing overlay to model the new one on (same tier: prod models on prod)
+  project_permits_env: false # true if the service's ArgoCD project already permits the new env's cluster/account
+  extend_terraform: false   # true if the service is terraform mode and the new env needs a terraform/environments/<env> + atlantis project
+
+# ── Ticketing ────────────────────────────────────────────────────────────────
+jira_ticket_id: ""          # e.g. DEVOPS-1234, or "" if none

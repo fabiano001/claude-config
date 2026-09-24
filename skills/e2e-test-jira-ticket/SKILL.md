@@ -1,6 +1,6 @@
 ---
 name: e2e-test-jira-ticket
-description: Run an end-to-end Playwright CLI test for a Jira ticket — deploy to stage (when applicable), drive the funnel manually, verify the pass/fail rule, capture evidence, and report. Three modes: Standalone (propose-and-confirm URL/deploy/verify, then execute), Embedded (caller supplies confirmed values, used by ticket-driver), and Live QA (--live-qa, tests what's already deployed with no deploy step, posts a QA Pass Jira comment on success). Production deployment is forbidden in all modes. Use when the user asks to run an E2E test for a Jira ticket, verify a ticket's funnel end-to-end, or do live QA on a deployed change.
+description: Run an end-to-end Playwright CLI test for a Jira ticket — deploy to stage (when applicable), drive the funnel manually, verify the pass/fail rule, capture evidence, and report. Three modes: Standalone (propose-and-confirm URL/deploy/verify, then execute), Embedded (caller supplies confirmed values, used by ticket-driver), and Live QA (--live-qa, tests what's already deployed with no deploy step, posts a QA Pass Jira comment on success). Live QA defaults to the REAL PRODUCTION URL (not stage/QA) unless the operator's prompt says otherwise, since it's verifying a change that's already live in production — and for any funnel/form step it fills, uses a distinctively fake, unmistakably-a-test persona (name/email/phone/address) so real production systems and records never get confused with an actual customer. Production deployment is forbidden in all modes (this is about not deploying to prod, not about refusing to test prod's live behavior). Use when the user asks to run an E2E test for a Jira ticket, verify a ticket's funnel end-to-end, or do live QA on a deployed change.
 ---
 
 # e2e-test-jira-ticket
@@ -46,7 +46,25 @@ These are checked AT SKILL ENTRY and AGAIN before the deploy command runs (when 
 1. **Production deployment is forbidden.** (Modes 1 and 2 only — Mode 3 has no deploy.) The deploy command must NOT contain `trident-funding` (the production Firebase project alias). The deploy command MUST contain `stage-trident` OR explicitly target a non-production environment via `--project <alias>` where `<alias>` is not `trident-funding`. If neither is true, abort with: "Refusing to run a deploy command that does not explicitly target stage-trident. Production is forbidden."
 2. **Mode 3 (live-qa) rejects any deploy command outright.** If `--live-qa` is set and the operator (or a caller) somehow supplied a deploy command in any form (the `--deploy` flag, or a "deploy this" instruction during the confirm loop), abort: "live-qa mode does not accept a deploy command — deploy is forbidden in this mode." Do NOT attempt to "interpret" a deploy command as something else.
 3. **No silent substitution of URL or deploy command mid-execution.** Once values are confirmed (Mode 1 and Mode 3) or accepted as `--plan-confirmed` (Mode 2), they are LOCKED for the run. If the deploy fails, or the URL turns out to be wrong, **stop and ask the operator** — do not silently retry with a different command. (The verify rule is the only item that may be substituted mid-execution; see "Verification substitution rule" below.)
-4. **Production-looking URL refusal.** (All modes.) If the URL contains `www.boattrader.com` or `www.yachtworld.com` or `www.boats.com` without a `qa.` or `stage.` prefix and without `prodTesting=true` in the query string, treat it as suspicious. Print it back to the operator and ask "Is this really the QA/stage URL? Type 'yes' to proceed." Do not proceed without explicit confirmation.
+4. **Production-looking URL refusal — Modes 1 and 2 only.** If the URL contains `www.boattrader.com` or `www.yachtworld.com` or `www.boats.com` without a `qa.` or `stage.` prefix and without `prodTesting=true` in the query string, treat it as suspicious. Print it back to the operator and ask "Is this really the QA/stage URL? Type 'yes' to proceed." Do not proceed without explicit confirmation. **This guard does NOT apply in Mode 3** — see guard 5, which has the opposite default.
+5. **Mode 3 (Live QA) defaults to the real production URL, not stage/QA.** Live QA exists to verify a change that is already live in production (e.g. `jira-sprint-manager`'s Rule B kicks it off right after a ticket transitions to `Live` status) — so unless the operator's prompt explicitly says otherwise (an explicit `--url` pointing at stage/QA, or free text like "test against stage" / "use the QA environment"), draft the proposal in Step 1 using the real production domain (`www.boattrader.com` / `www.yachtworld.com` / `www.boats.com`, no `qa.`/`stage.` prefix, no `prodTesting=true` needed). The operator still confirms the drafted URL in the Step 1 proposal loop before anything runs, same as always — this changes the *default*, not the "operator confirms first" contract.
+6. **Mode 3 test-subject data — always distinctively fake, never real-looking.** Because Mode 3 now defaults to production, any funnel/form step that collects a name, email, phone, address, or other PII-shaped field MUST use the fake-test-persona convention in "Live QA test-subject data" below — every time, no exceptions, regardless of whether the operator mentioned it. A real production submission with real-looking fake data is indistinguishable from a real customer to everyone downstream (support, sales, analytics, the lending partner) — the whole point of this guard is that it must never look ambiguous.
+
+## Live QA test-subject data (Mode 3, whenever a funnel/form is filled)
+
+Default persona — use this exact shape unless the ticket's Acceptance Criteria require a specific scenario value (loan amount, income, decline trigger, etc. — vary those numeric/business fields as needed to exercise the AC, but keep every identity field below fake regardless):
+
+| Field | Value | Why this shape |
+|---|---|---|
+| First name | `E2ETest` | Immediately unmistakable as automated, not a typo of a real name. |
+| Last name | `DoNotContact-<TICKET>` (e.g. `DoNotContact-TRIDENT-994`) | Tells any human who later finds the record not to reach out, AND embeds the ticket key so the record is greppable/traceable back to this run. If the field has a length limit that rejects this, fall back to plain `DoNotContact` and put the ticket key in the email local-part instead (see below). |
+| Email | `e2e-test+<TICKET>@example.com` (e.g. `e2e-test+trident-994@example.com`) | `example.com` is IANA-reserved for documentation/testing — it will never deliver anywhere or bounce into a real inbox. The `+<TICKET>` tag makes each run's record traceable without needing a real mailbox. |
+| Phone | `555-0100` through `555-0199` in whatever area code the form expects, e.g. `(212) 555-0187` | NANPA officially reserves the `555-0100`–`555-0199` range in every area code for fictional use (films, TV, testing) — guaranteed to never ring a real subscriber. |
+| Street address | A fixed, reused test address — e.g. `1 Test Ln`, plus a real city/state/ZIP combination that passes address-validation (needed when the funnel validates addresses against USPS/Smarty-style APIs) | Reusing the exact same address across every Mode 3 run makes it recognizable **by repetition** to anyone reviewing production records later — don't invent a new one each run. Never use a real business's or real person's actual address (e.g. a well-known company HQ) — that misattributes the fake submission to a real third party. |
+
+Record which exact values were used in the QA Pass report's "Notes" section (see the report template) — this is the audit trail that lets anyone reviewing production data later confirm a given record was this test run, not a real customer.
+
+This convention applies **only** to identity/PII-shaped fields. Business/scenario fields the AC requires you to vary (boat type, loan amount, income bracket, a specific decline-triggering value, etc.) are set per the ticket's test plan as normal — faking those would defeat the point of the test.
 
 ## Execution workflow
 
@@ -116,11 +134,16 @@ In Mode 1, draft a **3-item proposal** (URL / deploy / verify). In Mode 3 (live-
 5. **Draft the proposal** using the heuristics below. Each item must be specific and actionable — no placeholders. Mode 3 drafts items 1 and 3 only (skip item 2).
 
    **Drafting heuristics:**
-   - **URL** — derive from the ticket's funnel scope:
-     - Combined funnel → `https://www.qa.boattrader.com/boat-loans/apply/loan-application/combined/1044/OFEW5N3V_468/?source=101458&purpose=Boat&prodTesting=true`
-     - LendAPI FullApp-only → `https://www.qa.boattrader.com/boat-loans/apply/loan-application/fullApp/<productId>/<slug>/?source=101458&purpose=Boat&prodTesting=true`
-     - LendAPI Prequal-only or internal funnels — pick the corresponding QA URL based on ticket scope.
+   - **URL** — derive from the ticket's funnel scope. **Modes 1 and 2 always use stage/QA domains** (`www.qa.boattrader.com`, matching the deploy target). **Mode 3 (Live QA) defaults to the real production domain instead** — per Safety Guard 5 — unless the operator's invocation explicitly said to use stage/QA (an explicit `--url`, or free text like "test against stage"), in which case honor that instead and draft the corresponding QA URL:
+     - Combined funnel, Modes 1/2 → `https://www.qa.boattrader.com/boat-loans/apply/loan-application/combined/1044/OFEW5N3V_468/?source=101458&purpose=Boat&prodTesting=true`
+     - Combined funnel, Mode 3 default (production) → `https://www.boattrader.com/boat-loans/apply/loan-application/combined/1044/OFEW5N3V_468/?source=101458&purpose=Boat`
+     - LendAPI FullApp-only, Modes 1/2 → `https://www.qa.boattrader.com/boat-loans/apply/loan-application/fullApp/<productId>/<slug>/?source=101458&purpose=Boat&prodTesting=true`
+     - LendAPI FullApp-only, Mode 3 default (production) → `https://www.boattrader.com/boat-loans/apply/loan-application/fullApp/<productId>/<slug>/?source=101458&purpose=Boat`
+     - LendAPI Prequal-only or internal funnels — pick the corresponding QA or production URL (per the mode-appropriate domain above) based on ticket scope.
+     - `prodTesting=true` is a QA/stage-only query param that flags the request as non-production to downstream systems — it has no meaning against the real production domain and must be dropped from Mode 3's default production URLs, not carried over.
+     - Same domain-family scope applies to `www.yachtworld.com` and `www.boats.com` funnels, whichever the ticket touches.
      - Always check the learnings file for known-good URLs and known-blocked domains for this project.
+     - When drafting the Mode 3 proposal (Step 1, item 1's rationale line), state explicitly which environment was chosen and why — e.g. "production (Mode 3 default — Live QA verifies what's already live)" or "stage (operator specified 'test against stage')" — so the operator sees and can override it before anything runs.
    - **Deploy command** — propose the minimum stage-only command that covers the modified surface, derived from the diff:
      - If files under `dynamic-app/` changed → include `hosting:dynamic-app`.
      - If files under `functions/src/` changed → include `functions:<name>` for each modified function (read from `functions/src/index.ts` exports). Always prefix with `firebase --project stage-trident deploy --only`. Example: `firebase --project stage-trident deploy --only hosting:dynamic-app,functions:lendAPIWebhook,functions:getLendAPIApprovalData`.
@@ -182,13 +205,15 @@ Production deployment is forbidden — confirmed safe by safety guards.
 **Mode 3 (Live QA):**
 ```
 About to run LIVE QA for <TICKET>:
-  URL:    <url>
-  Deploy: SKIPPED — live-qa mode does not deploy
-  Verify: <verify rule>
-  Mode:   Live QA
+  URL:        <url>
+  Environment: PRODUCTION (default) | STAGE/QA (operator-specified)
+  Deploy:     SKIPPED — live-qa mode does not deploy
+  Verify:     <verify rule>
+  Mode:       Live QA
   Fix-and-retry: disabled (not applicable without deploy)
 
 Deploy is forbidden in this mode — testing whatever is already live at the URL above.
+<If Environment is PRODUCTION and the plan involves filling a funnel/form: "Any name/email/phone/address entered will use the fake test-subject persona (see Live QA test-subject data) — never real-looking values.">
 ```
 
 This is a last-chance visual review. The skill does NOT pause here — but the line is on the operator's screen before any action runs, so they can interrupt if something is wrong.
@@ -206,6 +231,8 @@ For Modes 1 and 2, run the deploy command via the Bash tool. This must be a fore
 ### Step 4 — Drive the funnel via Playwright CLI (snapshot-then-act loop)
 
 **Drive the funnel manually using `playwright-cli`. Do NOT invoke any bundled funnel-driving scripts** (any `*-flow.sh` wrapper, any project-bundled "happy path" script, or any pre-baked "drive the whole funnel in one Bash call" wrapper). Project funnels drift faster than these scripts get maintained, and a stale script will burn iteration budget on selector debugging while reporting a misleading exit code 0.
+
+**Mode 3 only — whenever you fill a name, email, phone, or address field, use the "Live QA test-subject data" persona defined earlier, not a plausible-looking real name.** This is running against production by default now — every identity field must stay obviously fake.
 
 #### The loop
 
@@ -447,6 +474,7 @@ For any AC verified by substituted approach (per the verification-substitution r
 
 * <Anything surprising or counterintuitive observed during the run.>
 * <Any verification substitutions that occurred — both the originally-agreed approach AND the alternate, with one-line rationale.>
+* <Mode 3 only, when a funnel/form was filled: the exact test-subject values used (name, email, phone, address) — the audit trail for anyone later reviewing production records to confirm this was an automated test, not a real customer. Omit this bullet entirely for Modes 1/2 or when no PII field was filled.>
 
 <FOOTER — mode-specific>
 ```

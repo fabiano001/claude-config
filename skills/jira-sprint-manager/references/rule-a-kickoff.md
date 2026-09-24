@@ -6,7 +6,9 @@ Used by `jira-sprint-manager` Step 2.5. The summary + flowchart live in SKILL.md
 
 ## Trigger
 
-The fetched ticket list contains ZERO tickets whose `fields.status.name == "In Progress"` AND at least ONE ticket anywhere in the TO DO column (`fields.status.name` in `New`, `Backlog`, or `Reopened` — see SKILL.md Step 3's status-priority table). This is broader than just "≥1 New" because Step 0 below needs to see the whole TO DO column, not only `New`; when nothing in the broader set actually qualifies, the rule still ends up doing nothing, same as before.
+The fetched ticket list contains ZERO tickets that are BOTH `fields.status.name == "In Progress"` AND unflagged (`fields.customfield_10091` empty — see "Flagged detection" below) AND at least ONE ticket anywhere in the TO DO column (`fields.status.name` in `New`, `Backlog`, or `Reopened` — see SKILL.md Step 3's status-priority table). This is broader than just "≥1 New" because Step 0 below needs to see the whole TO DO column, not only `New`; when nothing in the broader set actually qualifies, the rule still ends up doing nothing, same as before.
+
+**Flagged In Progress tickets don't count against this trigger.** A ticket that is `In Progress` but currently flagged (impediment) is excluded from the "In Progress" count entirely — it's treated as if it weren't there. So if the operator has exactly one In Progress ticket and it's flagged, that's zero *unflagged* In Progress tickets, and Rule A is free to fire and kick off the next eligible TO DO ticket (subject to that candidate's own flag check, same as always). This mirrors the same "flagged work is blocked, don't let it occupy a slot that should be actionable" reasoning as the candidate-side flag guard elsewhere in this rule — a flagged ticket shouldn't be able to silently freeze kickoff just by sitting In Progress.
 
 ## Step 0 — TODO-MODE priority check (runs FIRST, before the classic candidate walk)
 

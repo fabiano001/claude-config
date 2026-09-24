@@ -1,6 +1,6 @@
 ---
 name: jira-sprint-manager
-description: Generates a daily Jira sprint status report for the Trident BG board (391). Fetches every ticket in the active sprint assigned to Fabiano Desouza, sorts by board priority within each status, performs six autoaction rules (kickoff transition — prioritizing a TO DO ticket whose implementation was already started/completed via `ticket-driver TODO-MODE`, else the top of the New lane; never asks the operator anything, Live-ticket close prompts, prod deploys via merge-to-main, worktree+session kickoff for in-progress tickets, Testing-lane QA-pass verification + Under Review transition, Under-Review PR-approval auto-transition to PROD READY or Stakeholder Review), and writes a markdown report to ~/.claude/memory/jira-sprint-manager/<MM-DD-YY>.md (with -v2, -v3, … suffixes if a file for today already exists). Supports an autonomous mode (`/jira-sprint-manager autonomous`) that runs ONLY rules that can move tickets between lanes without operator approval (Rule A kickoff + Rule F Under-Review auto-transition); all other rules are skipped, no questions are queued, and if no autonomous moves landed the skill just prints a one-liner and writes no file. Designed for daily scheduled execution but also runs on demand, and is safe to run on a recurring loop: before doing anything else it checks a run-lock file (`~/.claude/memory/jira-sprint-manager/.run.lock`) and immediately exits with no report if a prior invocation is still active — including sitting idle mid-turn on an unanswered queued question, not just actively fetching/mutating — releasing the lock itself as the very last action of every exit path. No automatic expiry (a crashed/killed run's lock has to be removed by hand — see "Run lock" in the skill body). Whenever it queues an operator question (interactive mode only), it also sends one Slack message to the `#fabi-jira-sprint-manager` channel (`C0BMTSBK048`) before blocking on it, so the operator isn't just waiting on an unwatched terminal. Use when the user asks to run jira-sprint-manager, generate today's sprint report, refresh sprint assignments, or update the sprint status file. Does NOT execute /ticket-driver or /ticket-creator workflows directly — it spawns those in fresh Claude sessions via open-claude-session.sh; use those skills directly if you want to drive a single ticket end-to-end.
+description: Generates a daily Jira sprint status report for the Trident BG board (391). Fetches every ticket in the active sprint assigned to Fabiano Desouza, sorts by board priority within each status, performs six autoaction rules (kickoff transition — prioritizing a TO DO ticket whose implementation was already started/completed via `ticket-driver TODO-MODE`, else the top of the New lane; never asks the operator anything, Live-ticket close prompts, prod deploys via merge-to-main, worktree+session kickoff for in-progress tickets, Testing-lane QA-pass verification + Under Review transition, Under-Review PR-approval auto-transition to PROD READY or Stakeholder Review — Rule D bootstraps any repo `ticket-creator` tagged `(new)` in its Repos Involved comment by creating the local directory, invoking the `create-boatsgroup-repo` skill to create it on GitHub, and pushing an initial README as the first commit to `main`, before falling through to the normal worktree-creation flow), and writes a markdown report to ~/.claude/memory/jira-sprint-manager/<MM-DD-YY>.md (with -v2, -v3, … suffixes if a file for today already exists). Supports an autonomous mode (`/jira-sprint-manager autonomous`) that runs ONLY rules that can move tickets between lanes without operator approval (Rule A kickoff + Rule F Under-Review auto-transition); all other rules are skipped, no questions are queued, and if no autonomous moves landed the skill just prints a one-liner and writes no file. Designed for daily scheduled execution but also runs on demand, and is safe to run on a recurring loop: before doing anything else it checks a run-lock file (`~/.claude/memory/jira-sprint-manager/.run.lock`) and immediately exits with no report if a prior invocation is still active — including sitting idle mid-turn on an unanswered queued question, not just actively fetching/mutating — releasing the lock itself as the very last action of every exit path. No automatic expiry (a crashed/killed run's lock has to be removed by hand — see "Run lock" in the skill body). Publishes to a shared Claude Code Artifact — the Jira Sprint Loops Activity Log — on every single run, unconditionally (a run-completion entry: counts of tickets acted on + reminders, or the failure reason if the Jira fetch failed), and additionally publishes a separate pending-question entry before blocking whenever it queues an operator question (interactive mode only) — see "Activity log" in the skill body. (This replaced an earlier Slack-notification attempt, abandoned when an org-side approval gate on that tool never let it post reliably from a looped session, and a later file-based version at `~/.claude/jira-sprint-loops/activity.md`, since superseded.) The operator gets both a live "waiting on you" signal and a complete run history, even on quiet runs with nothing to report. Use when the user asks to run jira-sprint-manager, generate today's sprint report, refresh sprint assignments, or update the sprint status file. Does NOT execute /ticket-driver or /ticket-creator workflows directly — it spawns those in fresh Claude sessions via open-claude-session.sh; use those skills directly if you want to drive a single ticket end-to-end.
 ---
 
 You are **Jira Sprint Manager** — generate a daily snapshot of the active sprint's tickets assigned to the operator (Fabiano Desouza) on the Trident BG board (391). Run autonomously when scheduled; never prompt the operator unless an error blocks the run.
@@ -30,7 +30,7 @@ Concretely, with the current rule set:
 
 | Rule | Autonomous mode | Reason |
 |---|---|---|
-| A — Kickoff | **RUNS** | Auto-transitions a ticket to In Progress when nothing else is — prioritizing a TO DO ticket that already has TODO-MODE implementation underway, else the top of the New lane. No question asked either way. |
+| A — Kickoff | **RUNS** | Auto-transitions a ticket to In Progress when nothing else is (a flagged In Progress ticket doesn't count as "something else") — prioritizing a TO DO ticket that already has TODO-MODE implementation underway, else the top of the New lane. No question asked either way. |
 | B — Live follow-up | **SKIPPED** | Every meaningful path queues a question (Live QA kickoff or close-the-ticket). |
 | C — PROD READY deploy | **SKIPPED** | The lane-moving path (3c → Live finalization) requires the 3-option approval question. Paths 3a/3b never move lanes. |
 | D — In Progress worktree kickoff | **SKIPPED** | Autonomous (no question) but never moves lanes; the side-effect (opening a new iTerm2 tab to run `/ticket-driver` or `/ticket-creator`) is not appropriate when nobody is at the workstation. |
@@ -135,6 +135,19 @@ The six rules run in order on each invocation. Each operates on a disjoint board
 
 Each ticket carries an `actionsTaken` field that is an ordered LIST of action strings (initially empty). Rules **append** to this list — they do not overwrite it.
 
+**Universal flag gate (MANDATORY, checked FIRST for every ticket, in every rule, before any rule-specific logic runs):** if `fields.customfield_10091` is non-empty (the ticket is flagged — see Step 2's field note for the verified field id and the 2026-05-20 incident where the wrong short name silently defeated this exact check), the ticket is a **complete no-op** for whichever rule is currently evaluating it:
+- No Jira transition, no comment, no worklog, no assignee change.
+- No worktree creation, no Claude session launch (`open-claude-session.sh`), no `/background` dispatch.
+- No Slack post.
+- No `actionsTaken` entry — a flagged ticket took no action, so there's nothing to record there.
+- **Exactly one `REMINDERS` entry**, so the skip is visible rather than silent (this codebase has already been burned once by a silent flagged-ticket skip — see Rule A's Step 2 note and its "Integrity guardrail" — the fix there was visibility, not silence, and that same fix now applies uniformly). Match Rule A's established phrasing: `"<TICKET-KEY> is flagged (impediment) — Rule <letter> made no changes, actions, or transitions. Clear the flag or unblock the impediment before next run if it's now actionable."`
+
+This gate applies **per rule, per ticket** — a ticket can be flagged when Rule D would otherwise touch it but unflagged when Rule B looks at it (flags don't change mid-run, but the point is each rule checks independently; there's no shared "already reported flagged" state to dedupe across rules, so if a flagged ticket happens to sit in a column two rules would otherwise both act on — not possible today since columns are disjoint, but keep this in mind if a future rule's trigger ever overlaps another's — each rule still emits its own REMINDERS line).
+
+This also applies to **every chained/back-edge invocation**, not just the forward sweep: when Rule A chains into Rule D, Rule E chains into Rule F, Rule F chains into Rule C, or Rule C chains into Rule B, the chained rule re-checks the flag on that same ticket before doing anything (in practice this is moot for the CURRENT chains, since a rule that transitions a ticket already had to gate on that same ticket not being flagged to do the transitioning in the first place — but the chained rule must not assume that and skip its own check).
+
+**Rule A already implements this gate for its own candidate-selection walk** (skipping flagged New/TO-DO candidates with a `REMINDERS` entry — see Rule A's section below and [references/rule-a-kickoff.md](references/rule-a-kickoff.md)) — that existing behavior IS this universal gate for Rule A specifically; nothing further to add there. **Rules B, C, D, E, and F did not previously check the flag at all** — each rule's section below and its reference file now states exactly where this check sits in that rule's own step sequence.
+
 **Whenever any rule calls `open-claude-session.sh` with `--prompt` (Rules B, C, D all do this), print that EXACT prompt string in the terminal response at the time of the call — not a paraphrase, not "opened a session with a prompt for X," the literal text including any `/background` prefix, exactly as passed to `--prompt`.** This applies whether the call opens a brand-new session (Rule D's implementation/research kickoffs) or resumes an existing one (Rule B's Live QA resume, Rule C's review-comments resume). Two places need this, not just one:
 1. **Live, in your conversational response, as it happens** — the operator watching an interactive run (or checking back on a looped/scheduled one afterward) needs to actually see and be able to copy the prompt text, not just be told a session was opened. This is a real gap that's happened before: the skill narrated "opened a backgrounded session with a prompt for ticket-driver" without ever stating what that prompt actually was — useless if the operator wants to verify it or run it themselves.
 2. **In the `actionsTaken` entry itself** — every action string in this file that describes opening/resuming a session (see each rule's own "on success" wording below) must embed the literal `--prompt` value, quoted, not a shortened/reworded version of it.
@@ -155,7 +168,7 @@ If you ever catch yourself about to write or say something like "with /ticket-dr
 
 ```mermaid
 flowchart TD
-    A[Rule A start] --> B{0 In Progress<br/>AND ≥1 TO DO ticket?}
+    A[Rule A start] --> B{0 unflagged In Progress<br/>AND ≥1 TO DO ticket?}
     B -->|No| ZNOOP[Skip Rule A entirely this run]
     B -->|Yes| P0{Walk TO DO column<br/>New/Backlog/Reopened, rank ASC:<br/>any unflagged ticket with a<br/>'Ticket Driver Implementation<br/>Started/Completed' marker<br/>any repo?}
     P0 -->|Yes — TODO-MODE ticket found| Q0[getTransitions for that ticket]
@@ -194,7 +207,7 @@ flowchart TD
     CLASS -->|Otherwise| SETF[Set Ticket Type = Feature]
 ```
 
-**Trigger:** ZERO tickets with `status.name == "In Progress"` AND ≥1 ticket anywhere in the TO DO column (`New`/`Backlog`/`Reopened`). (Broadened from the original "≥1 New" — the new TODO-MODE-priority sub-check below needs to see the whole TO DO column, not just `New`. This doesn't change outcomes when nothing qualifies: if there's no TODO-MODE-marked ticket and no `New` ticket either, the rule still ends up doing nothing, exactly as before.)
+**Trigger:** ZERO tickets that are BOTH `status.name == "In Progress"` AND unflagged (`fields.customfield_10091` empty — see the "Flagged" detection rules below) AND ≥1 ticket anywhere in the TO DO column (`New`/`Backlog`/`Reopened`). A flagged In Progress ticket does not count toward this zero — it's effectively invisible to this trigger, so one flagged In Progress ticket plus zero unflagged ones still satisfies "zero In Progress" and lets Rule A fire. (Broadened from the original "≥1 New" — the new TODO-MODE-priority sub-check below needs to see the whole TO DO column, not just `New`. This doesn't change outcomes when nothing qualifies: if there's no TODO-MODE-marked ticket and no `New` ticket either, the rule still ends up doing nothing, exactly as before.)
 
 **Step 0 — TODO-MODE priority check (NEW, runs before the classic candidate walk):** walk the FULL TO DO column in `rank ASC` order (not just `New` — a TODO-MODE-started ticket could be sitting in `Backlog` or `Reopened` too) looking for the first unflagged ticket whose comments contain a `Ticket Driver Implementation Started (` or `Ticket Driver Implementation Completed (` marker for **any** repo (bare prefix match — the specific repo name in parentheses doesn't matter here, unlike `ticket-driver`'s own per-repo Guard check). Flagged tickets are skipped with the same `REMINDERS` treatment as the classic walk, not silently. **If found:** this ticket already has implementation started (or even finished) ahead of schedule via `jira-sprint-todo-loop`/`ticket-driver TODO-MODE` — transition it to `In Progress` via the same `getTransitionsForJiraIssue` + `transitionJiraIssue` mechanics as the classic walk, append `"Moved to In Progress — TODO-MODE implementation already underway, no worktree/session needed"` to `actionsTaken`, run the same Ticket-Type auto-classification as always, and **mark the ticket `Rule-D-SKIP`** (a new, distinct marker — NOT `Rule-A-failed`, since the transition genuinely succeeded; it just means Rule D has nothing to do here). Stop — Rule A picks at most one kickoff target per run, same as always, so the classic candidate walk below never runs this cycle. **If NOT found:** fall through to the classic walk.
 
@@ -212,7 +225,9 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[Rule B start, per Live ticket] --> B[Fetch comments]
+    A[Rule B start, per Live ticket] --> FLAG{Ticket flagged?<br/>customfield_10091<br/>non-empty}
+    FLAG -->|Yes| FSKIP[No-op: REMINDERS only<br/>no actionsTaken, no mutation]
+    FLAG -->|No| B[Fetch comments]
     B --> C{Any comment contains<br/>'live qa pass'<br/>case-insensitive?}
     C -->|No, LIVE_QA_DONE=false| D[Ask 'Run /e2e-test-jira-ticket --live-qa?'<br/>queued in QUESTIONS]
     D --> D1{Operator answer<br/>in Step 6}
@@ -239,7 +254,7 @@ flowchart TD
 
 **Trigger:** ≥1 ticket with `status.name == "Live"` at the start of the run, OR ≥1 ticket transitioned into `Live` by Rule C during the same run (Rule C → Rule B back-edge chain — see Rule C section and "Interaction order across rules"). For chained tickets, Rule B runs its full per-ticket evaluation (Live QA pre-check + stakeholder check); its `actionsTaken` entries stack additively on top of Rule C's deploy-finalization entry. Rule B's pre-check for a freshly-deployed chained ticket almost always finds no `live qa pass` marker → queues the Live QA kickoff question for the operator in the same run.
 
-**Summary:** for each Live ticket, fetch comments and run two pre-checks in order:
+**Summary:** for each Live ticket, **first apply the universal flag gate** (see above — flagged tickets get exactly one `REMINDERS` entry and nothing else, skip straight to the next ticket). For unflagged tickets, fetch comments and run two pre-checks in order:
 
 1. **Live QA pre-check** — scan comments for any containing `live qa pass` (case-insensitive — matches both the automated `# LIVE QA Pass ✅` marker posted by `e2e-test-jira-ticket --live-qa` Mode 3 AND any manual operator-posted "Live QA Pass …" comment).
    - **No marker found** → queue a yes/no question asking whether to run automated Live QA. On `yes`: look up the impl session from `~/.claude/memory/sessions.md` (topmost `## ticket-driver` entry for this ticket), then run the **live-agent check** ([references/live-agent-check.md](references/live-agent-check.md)): `claude agents --all --json`, does an entry with this `sessionId` carry a `pid`? If NOT live, resume it via `open-claude-session.sh --resume <id> --prompt "/e2e-test-jira-ticket <TICKET-KEY> --live-qa"`. If LIVE, do NOT attempt `--resume` or `--fork-session` (confirmed 2026-07-29: `--resume` is refused outright, and killing the session's pid just gets it auto-respawned by the daemon rather than freed up) — instead append a REMINDERS entry with the exact ready-made prompt for the operator to paste into that session via `claude agents` (space to reply) themselves. On `no`, an auto-resume failure, or the live-agent case: append the matching skip/fallback action and **skip the rest of Rule B for this ticket this run** (no stakeholder check). The next run picks up after Live QA Pass is posted.
@@ -256,7 +271,9 @@ Rule B asks **at most ONE question per ticket per run** — Live QA precedes Sta
 
 ```mermaid
 flowchart TD
-    A[Rule C start, per PROD READY ticket] --> B[Fetch deployment notes<br/>customfield_10313 / description]
+    A[Rule C start, per PROD READY ticket] --> FLAG{Ticket flagged?<br/>customfield_10091<br/>non-empty}
+    FLAG -->|Yes| FSKIP[No-op: REMINDERS only<br/>no actionsTaken, no mutation]
+    FLAG -->|No| B[Fetch deployment notes<br/>customfield_10313 / description]
     B --> C[Resolve target repo]
     C --> D[gh pr list --head TICKET-KEY<br/>--state open]
     D --> E{Open PR found?}
@@ -303,6 +320,7 @@ flowchart TD
 **⚠️ Safety contract:** production deploys flow through CICD, NEVER through this skill directly. The skill is NOT authorized to run `firebase deploy …` or any direct prod-deploy command. The only production-affecting action it takes is `gh pr merge`; CICD picks up from there. If CICD misses a function deploy, the skill REPORTS the gap — it does not auto-deploy.
 
 **Summary:**
+0. **Universal flag gate (runs before step 1, for every PROD READY ticket):** flagged tickets get exactly one `REMINDERS` entry and nothing else — no deploy notes fetch, no `gh` call, no merge, no transition. Skip straight to the next ticket.
 1. **Pre-flight (open PR):** lookup `gh pr list --head <KEY> --state open`. If an open PR exists, fetch mergeability (`mergeable`, `mergeStateStatus`, `reviewDecision`, `isDraft`, checks) → fetch unresolved review threads via GraphQL.
 2. **Four exclusive paths:**
    - **3a — Hard failure** (`MERGEABLE == false`): append reminder + required-action list to `REMINDERS`. No question, no merge.
@@ -327,7 +345,9 @@ The chain is **BROKEN in autonomous mode** — Rule C is skipped there entirely,
 
 ```mermaid
 flowchart TD
-    A[Rule D start, per In Progress ticket] --> B{Rule A appended<br/>'Move failed' OR marked<br/>Rule-D-SKIP for this ticket?}
+    A[Rule D start, per In Progress ticket] --> FLAG{Ticket flagged?<br/>customfield_10091<br/>non-empty}
+    FLAG -->|Yes| FSKIP[No-op: REMINDERS only<br/>no actionsTaken, no mutation]
+    FLAG -->|No| B{Rule A appended<br/>'Move failed' OR marked<br/>Rule-D-SKIP for this ticket?}
     B -->|Yes| Z[Skip — precondition not met,<br/>or nothing to do<br/>TODO-MODE already handled it]
     B -->|No| C[Fetch comments + description + summary]
     C --> D[Scan comments for marker:<br/>'ticket research completed' /<br/>'implementation ready' / etc]
@@ -351,34 +371,42 @@ flowchart TD
     Q2 --> TUR[Lookup 'Under review' transition<br/>+ transitionJiraIssue]
     TUR --> WL[addWorklogToJiraIssue with hours]
     WL --> AT[Append 'Spike moved to Under Review<br/>+ logged Xh' to actionsTaken]
-    LOOP --> H{IMPL_PATH exists<br/>for this repo?}
-    H -->|Yes| J[Append reminder for this repo]
-    H -->|No| K[git worktree add IMPL_PATH<br/>on TICKET-KEY branch]
-    K --> L["open-claude-session.sh IMPL_PATH<br/>--prompt '/background /ticket-driver TICKET-KEY'<br/>--session-name 'TICKET-KEY-SEGMENT'"]
+    LOOP --> H{Repo dir exists<br/>at ~/BOATS-GROUP-PROJECTS-GITHUB/repo?}
+    H -->|Yes| H2{IMPL_PATH exists<br/>for this repo?}
+    H -->|No, tagged new| BOOT1["New-repo bootstrap:<br/>mkdir repo dir → create-boatsgroup-repo<br/>skill (wait) → git init + push main"]
+    H -->|No, not tagged new| J2[Skip repo — not found at path<br/>append actionsTaken]
+    BOOT1 --> H2
+    H2 -->|Yes| J[Append reminder for this repo]
+    H2 -->|No| K[git worktree add IMPL_PATH<br/>on TICKET-KEY branch]
+    K --> L["open-claude-session.sh IMPL_PATH<br/>--prompt '/background /ticket-driver TICKET-KEY'<br/>--session-name 'TICKET-KEY-SEGMENT'<br/>--auto-close-on-background"]
     L --> NEXT[Next repo → repeat LOOP]
     J --> NEXT
+    J2 --> NEXT
     NEXT --> SUM[Append consolidated summary<br/>to actionsTaken]
     I -->|Yes| M[Append reminder to complete research<br/>under existing RESEARCH_PATH]
+    I -->|No, repo tagged new,<br/>dir missing| BOOT2["New-repo bootstrap (same as above)"]
+    BOOT2 --> N
     I -->|No| N[git worktree add RESEARCH_PATH<br/>on TICKET-KEY-research branch]
     N --> SPK2{IS_SPIKE?}
     SPK2 -->|No| O["open-claude-session.sh RESEARCH_PATH<br/>--prompt '/background /ticket-creator'<br/>--session-name 'TICKET-KEY-SEGMENT'"]
-    SPK2 -->|Yes| O2["open-claude-session.sh RESEARCH_PATH<br/>--prompt '/background /research SPIKE'<br/>--session-name 'TICKET-KEY-SPIKE'"]
+    SPK2 -->|Yes| O2["open-claude-session.sh RESEARCH_PATH<br/>--prompt '/background /research SPIKE TICKET-KEY'<br/>--session-name 'TICKET-KEY-SPIKE'"]
 ```
 
 **Trigger:** ≥1 ticket with `status.name == "In Progress"`. The inner triggers (comment match for an "implementation ready" marker, and SPIKE detection on `fields.summary`) gate which phase fires.
 
 **Summary:**
+0. **Universal flag gate (runs before step 1, for every In Progress ticket):** flagged tickets get exactly one `REMINDERS` entry and nothing else — no comment/marker scan, no worktree, no session launch. Skip straight to the next ticket. (A flagged ticket couldn't have reached In Progress via Rule A's own transition in the first place — Rule A's candidate walk already excludes flagged tickets — but a ticket can be flagged manually AFTER already being In Progress, so this check still matters here.)
 1. **Chain with Rule A:** skip tickets where Rule A appended `"Move failed: …"` (their status didn't really land in Jira) **OR** where Rule A marked the ticket `Rule-D-SKIP` (the status DID land, but Rule A's Step 0 already determined this ticket's implementation is being handled via `ticket-driver TODO-MODE` — there's no worktree to create and no session to kick off, so Rule D has nothing to do here at all).
 2. **Fetch ticket comments + description + summary.** Scan comments for any of `ticket research completed` / `research completed` / `implementation ready` / `ready for implementation`. Set `MARKER_FOUND`.
-2.5. **Scan comments for the repos-involved marker.** `/ticket-creator` posts a comment of the exact shape `This ticket will involve changes in these repos: <repo1>, <repo2>, …`. If ≥1 such comment exists, take the most recently created one, parse the comma-separated list, and validate each entry against the known-repo list (case-insensitive) → `REPOS_FROM_COMMENT`. Unrecognized entries are dropped with an `actionsTaken` note, not silently invented into a path. Empty if no such comment exists (older tickets predating this convention).
+2.5. **Scan comments for the repos-involved marker.** `/ticket-creator` posts a comment of the exact shape `This ticket will involve changes in these repos: <repo1>, <repo2>, …`, tagging any repo that doesn't exist yet with a trailing ` (new)` (e.g. `lambda-node-trident-loan-recovery (new)`). If ≥1 such comment exists, take the most recently created one, parse the comma-separated list, strip and record each entry's `(new)` tag as `IS_NEW_REPO`, then validate the stripped name against the known-repo list (case-insensitive) → `REPOS_FROM_COMMENT`. Unrecognized entries are dropped with an `actionsTaken` note UNLESS tagged `(new)` — those are always kept, since a brand-new repo is expected to be absent from the static known-repo list. Empty if no such comment exists (older tickets predating this convention).
 3. **Detect SPIKE.** A ticket is a SPIKE if its `fields.summary` contains the substring `SPIKE` (case-insensitive). For Trident tickets this typically appears as `FINANCE | SPIKE | …`.
 4. **Determine target repo(s).** `REPOS_FROM_COMMENT` takes priority in both phases when non-empty:
    - **Research phase** (MARKER_FOUND == false): if `REPOS_FROM_COMMENT` is non-empty, use its first entry (research runs in one primary worktree even when multiple implementation repos are already known). Otherwise, single repo from description+summary text match, default `webapp-react-trident`. Set `TARGET_REPOS = [<one repo>]`.
-   - **Implementation phase** (MARKER_FOUND == true): if `REPOS_FROM_COMMENT` is non-empty, use it directly as `TARGET_REPOS` — skip the Documentation/Technical-Details scan and the ask-operator fallback entirely, since the comment is the authoritative source. Otherwise, scan the `Documentation` / `Technical Details` sections first for ALL repo names; fall back to full description+summary if none found there; ask the operator (via `AskUserQuestion`) if still ambiguous. Remove any repo whose disk path doesn't exist.
+   - **Implementation phase** (MARKER_FOUND == true): if `REPOS_FROM_COMMENT` is non-empty, use it directly as `TARGET_REPOS` — skip the Documentation/Technical-Details scan and the ask-operator fallback entirely, since the comment is the authoritative source. Otherwise, scan the `Documentation` / `Technical Details` sections first for ALL repo names; fall back to full description+summary if none found there; ask the operator (via `AskUserQuestion`) if still ambiguous. Remove any repo whose disk path doesn't exist — UNLESS it's tagged `IS_NEW_REPO`, in which case run the **New-repo bootstrap** (create the directory, create the GitHub repo via `create-boatsgroup-repo`, push a first commit to `main`) instead of removing it — see [references/rule-d-worktree-kickoff.md](references/rule-d-worktree-kickoff.md) for the full procedure.
 5. **Compute paths.** Research: `~/BOATS-GROUP-PROJECTS-GITHUB/<repo>-<TICKET-KEY>-research`. Implementation: `~/BOATS-GROUP-PROJECTS-GITHUB/<repo>-<TICKET-KEY>` for each repo in TARGET_REPOS.
 6. **Three phases:**
-   - **6b — Research phase** (MARKER_FOUND == false, regardless of SPIKE): if `RESEARCH_PATH` exists → reminder. Else `git worktree add` on `<TICKET-KEY>-research` branch (3-case logic: local / remote / new from main), then open a new Claude session with a command that depends on `IS_SPIKE`: non-SPIKE → `open-claude-session.sh <path> --prompt "/background /ticket-creator" --session-name "<TICKET-KEY>-<SEGMENT>"`; SPIKE → `open-claude-session.sh <path> --prompt "/background /research SPIKE" --session-name "<TICKET-KEY>-SPIKE"`, which relies on `/research`'s own SPIKE mode to ask the operator what to research. Both branches now background the session immediately (operator still reachable, same as 6a's `/ticket-driver` kickoff) AND pre-name it per the `<TICKET-KEY>-<SEGMENT>` convention (see step 5.6 of the full detail) so it shows up correctly in the agent view without a manual rename. SPIKE tickets additionally get this worktree logged to `~/.claude/memory/sessions.md` (same format `ticket-creation`/`ticket-driver` use) — a SPIKE's entire lifecycle can be just this one worktree, and `/research` never logs itself to `sessions.md` under any circumstance, so this is the only durable record of it.
-   - **6a — Implementation phase** (MARKER_FOUND == true AND SPIKE == false): **loop over every repo in TARGET_REPOS**. For each: if `IMPL_PATH` exists → reminder. Else `git worktree add` on `<TICKET-KEY>` branch + `open-claude-session.sh <path> --prompt "/background /ticket-driver <TICKET-KEY>" --session-name "<TICKET-KEY>-<SEGMENT>"` — the `/background` prefix backgrounds the session immediately so it doesn't occupy the operator's foreground attention, and `--session-name` (recomputed per repo — see step 5.6) pre-names it in the agent view. Per-repo failures are non-fatal (skip that repo, continue). After all repos processed, append a consolidated summary listing created, pre-existing, and failed worktrees.
+   - **6b — Research phase** (MARKER_FOUND == false, regardless of SPIKE): if `RESEARCH_PATH` exists → reminder. Else `git worktree add` on `<TICKET-KEY>-research` branch (3-case logic: local / remote / new from main), then open a new Claude session with a command that depends on `IS_SPIKE`: non-SPIKE → `open-claude-session.sh <path> --prompt "/background /ticket-creator" --session-name "<TICKET-KEY>-<SEGMENT>"`; SPIKE → `open-claude-session.sh <path> --prompt "/background /research SPIKE <TICKET-KEY>" --session-name "<TICKET-KEY>-SPIKE"`, which relies on `/research`'s own SPIKE mode (now ticket-key-aware) to ask the operator what to research. Both branches now background the session immediately (operator still reachable, same as 6a's `/ticket-driver` kickoff) AND pre-name it per the `<TICKET-KEY>-<SEGMENT>` convention (see step 5.6 of the full detail) so it shows up correctly in the agent view without a manual rename. SPIKE tickets additionally get a placeholder logged to `~/.claude/memory/sessions.md` immediately (same format `ticket-creation`/`ticket-driver` use) — a SPIKE's entire lifecycle can be just this one worktree — which the spawned `/research` session then completes in place once it finishes, via its own "SPIKE ticket-key fold-back" (real session id + `file`/`artifact`), instead of that placeholder staying a dead stub forever.
+   - **6a — Implementation phase** (MARKER_FOUND == true AND SPIKE == false): **loop over every repo in TARGET_REPOS**. For each: if `IMPL_PATH` exists → reminder. Else `git worktree add` on `<TICKET-KEY>` branch + `open-claude-session.sh <path> --prompt "/background /ticket-driver <TICKET-KEY>" --session-name "<TICKET-KEY>-<SEGMENT>" --auto-close-on-background` — the `/background` prefix backgrounds the session immediately so it doesn't occupy the operator's foreground attention, `--session-name` (recomputed per repo — see step 5.6) pre-names it in the agent view, and `--auto-close-on-background` (same mechanism `launch-pr-review-agent`/`launch-research-agent`/`launch-resume-session` already use) closes the now-idle launching tab automatically once the `/background` handoff completes, instead of leaving it sitting open with nothing left to do. Per-repo failures are non-fatal (skip that repo, continue). After all repos processed, append a consolidated summary listing created, pre-existing, and failed worktrees.
    - **6a-spike — Spike-close phase** (MARKER_FOUND == true AND SPIKE == true): queue **Q1** (yes/no — move to Under Review) and on Q1=Yes queue **Q2** (hours). Transition + worklog as before. No worktrees created.
 
 Rule D's research phase never blocks on `AskUserQuestion`. The **implementation phase** has one legitimate ask (repo disambiguation when the multi-repo scan yields nothing). **Only the SPIKE-close phase queues questions** (Q1 + optional Q2).
@@ -391,7 +419,9 @@ Rule D's research phase never blocks on `AskUserQuestion`. The **implementation 
 
 ```mermaid
 flowchart TD
-    A[Rule E start, per Testing ticket] --> B[Fetch comments + description + summary]
+    A[Rule E start, per Testing ticket] --> FLAG{Ticket flagged?<br/>customfield_10091<br/>non-empty}
+    FLAG -->|Yes| FSKIP[No-op: REMINDERS only<br/>no actionsTaken, no mutation]
+    FLAG -->|No| B[Fetch comments + description + summary]
     B --> C{Any comment body<br/>starts with 'QA Pass'<br/>case-insensitive?}
     C -->|No| Z[Skip — no QA-pass marker]
     C -->|Yes| D[Append yes/no Q1 to QUESTIONS:<br/>'Is QA complete? Move to Under Review?']
@@ -415,7 +445,7 @@ flowchart TD
 
 **Trigger:** ≥1 ticket with `status.name` in `Resolved - Ready for QA`, `Resolved - Ready for AQA` (TESTING column).
 
-**Summary:** for each Testing ticket, fetch comments and scan for any comment whose body (trimmed, case-insensitive) **starts with** `qa pass` — this is the QA-team's "QA Pass" sign-off marker (distinct from the Live-QA marker `Live QA Pass` that Rule B scans for; Rule E's start-of-body match deliberately excludes `Live QA Pass` since that begins with `Live`).
+**Summary:** for each Testing ticket, **first apply the universal flag gate** (flagged tickets get exactly one `REMINDERS` entry and nothing else — no comment fetch, no question, no transition; skip straight to the next ticket). For unflagged tickets, fetch comments and scan for any comment whose body (trimmed, case-insensitive) **starts with** `qa pass` — this is the QA-team's "QA Pass" sign-off marker (distinct from the Live-QA marker `Live QA Pass` that Rule B scans for; Rule E's start-of-body match deliberately excludes `Live QA Pass` since that begins with `Live`).
 
 - **No marker found** → skip the ticket this run (no question, no action).
 - **Marker found** → queue Q1, a yes/no question: `"<TICKET-KEY> is in Testing and a 'QA Pass' comment was found. Has QA been completed and should we move it to Under Review? (yes/no)"`.
@@ -448,7 +478,9 @@ Rule E asks **up to TWO questions per ticket per run** (Q1 + optional Q2). Q2 on
 
 ```mermaid
 flowchart TD
-    A[Rule F start, per Under review ticket] --> B[Determine target repo<br/>from text, default webapp-react-trident]
+    A[Rule F start, per Under review ticket] --> FLAG{Ticket flagged?<br/>customfield_10091<br/>non-empty}
+    FLAG -->|Yes| FSKIP[No-op: REMINDERS only<br/>no actionsTaken, no mutation]
+    FLAG -->|No| B[Determine target repo<br/>from text, default webapp-react-trident]
     B --> C[gh pr list --head TICKET-KEY --state open<br/>--json url,number,isDraft,reviewDecision]
     C --> CE{gh error?}
     CE -->|Yes| ZC[Terminal warning only<br/>no actionsTaken or REMINDERS entry]
@@ -467,7 +499,7 @@ flowchart TD
 
 **Trigger:** ≥1 ticket with `status.name == "Under review"` (UNDER REVIEW column, priority 5).
 
-**Summary:** for each Under-review ticket, determine the target repo (same description+summary scan as Rule D/E, default `webapp-react-trident`), then run `gh pr list --repo boatsgroup/<repo> --head <TICKET-KEY> --state open --json url,number,isDraft,reviewDecision`. Gate:
+**Summary:** for each Under-review ticket, **first apply the universal flag gate** (flagged tickets get exactly one `REMINDERS` entry and nothing else — no `gh` call, no transition; skip straight to the next ticket). For unflagged tickets, determine the target repo (same description+summary scan as Rule D/E, default `webapp-react-trident`), then run `gh pr list --repo boatsgroup/<repo> --head <TICKET-KEY> --state open --json url,number,isDraft,reviewDecision`. Gate:
 - **At least one open PR AND every open PR has `reviewDecision == "APPROVED"`** → proceed to transition.
 - **`gh` error** → terminal warning only; no REMINDERS entry (can't know PR state).
 - **No open PRs found** → append REMINDERS entry: `"<TICKET-KEY> is Under Review — no open PRs found. Check if PR exists."` The ticket stays in Under Review for the next run.
@@ -608,7 +640,7 @@ Use the Write tool to create the file at `OUTPUT_PATH`. **NEVER** use shell redi
 
 **Autonomous-mode short-circuit (applies BEFORE the order below):** if running in autonomous mode (see "Autonomous mode" near the top of this file):
 - Skip step 3 entirely — `QUESTIONS` is always empty in autonomous mode, but if a future bug somehow queued one, do NOT call `AskUserQuestion`; log a terminal warning and treat the queue as empty.
-- If NO rule appended anything to any ticket's `actionsTaken` (sum across all tickets == 0), **release the run lock** (see "Run lock" near the top of this file), then print exactly the one-line message `No autonomous actions were available.` to the terminal and **exit without writing a report file**. Do NOT print the Reminders / Questions headers, do NOT call Step 5.
+- If NO rule appended anything to any ticket's `actionsTaken` (sum across all tickets == 0): **publish a run-completion entry to the Activity artifact** (see "Activity log" below — use the no-op wording: `jira-sprint-manager (autonomous): 0 tickets acted on — no report file written`), then **release the run lock** (see "Run lock" near the top of this file), then print exactly the one-line message `No autonomous actions were available.` to the terminal and **exit without writing a report file**. Do NOT print the Reminders / Questions headers, do NOT call Step 5.
 - If at least one autonomous `actionsTaken` entry exists, fall through to the standard order below. The `## Questions` section renders as `None`. The `## Reminders` section renders the (likely empty) reminder list.
 
 Order:
@@ -632,16 +664,64 @@ Order:
    ```
    If empty, print `## Questions` then `None`.
 
-2a. **If `QUESTIONS` is non-empty, notify Slack BEFORE blocking.** This run is now looped (see "Run lock" above) and may run unattended for stretches — a queued question sitting silent in a terminal nobody is watching defeats the point of looping this skill at all. Send one message via `mcp__claude_ai_Slack__slack_send_message` (`channel_id: "C0BMTSBK048"` — the `#fabi-jira-sprint-manager` channel) containing the full list of queued questions, e.g.:
-    ```
-    🔔 jira-sprint-manager is waiting on your answer(s) before it can finish this run:
+2a. **If `QUESTIONS` is non-empty, publish to the Activity artifact BEFORE blocking.** This run is now looped (see "Run lock" above) and may run unattended for stretches — a queued question sitting silent in a terminal nobody is watching defeats the point of looping this skill at all. (Two earlier versions of this step tried other channels: a Slack notification — abandoned 2026-08-10 after an org-side approval gate on `mcp__claude_ai_Slack__slack_send_message` never let it post reliably from a looped session, regardless of local settings changes or session restarts — and, briefly, a local markdown file at `~/.claude/jira-sprint-loops/activity.md` — superseded 2026-08-11 by the Claude Code Artifact this step now uses, so the log itself has a durable, shareable URL instead of living only on this machine.) Follow **Activity log** below to publish one entry containing the full list of queued questions. **Autonomous mode never reaches this step** (`QUESTIONS` is always empty there, per the Autonomous-mode contract), so no special-casing is needed beyond the existing "if non-empty" gate. **This fires at most once per pending question**, not repeatedly: the very next loop iteration will find the run lock still held (this run hasn't released it — it's still blocked on `AskUserQuestion`) and exit immediately at the lock check, long before it would ever reach this step again — so the log gets one entry, not one per loop tick while the operator is away.
 
-    - <question 1>
-    - <question 2>
+## Activity log (shared Claude Code Artifact, used by this skill AND `jira-sprint-todo-loop`)
 
-    Reply in the Claude Code session running jira-sprint-manager to continue.
-    ```
-    One message per run, listing every queued question together — not one Slack message per question. **Autonomous mode never reaches this step** (`QUESTIONS` is always empty there, per the Autonomous-mode contract), so no special-casing is needed beyond the existing "if non-empty" gate. **If the Slack send fails** (bad channel id, auth error, network error): print one warning line and continue to step 3 anyway — a failed notification must never block the actual question from being asked. **This fires at most once per pending question**, not repeatedly: the very next loop iteration will find the run lock still held (this run hasn't released it — it's still blocked on `AskUserQuestion`) and exit immediately at the lock check, long before it would ever reach this step again — so the operator gets pinged once, not spammed on every loop tick while they're away.
+Both skills publish to the **same** Claude Code Artifact — a small, timestamped, newest-first HTML log — rather than each other's terminal output or a Slack channel. This is the offline record of anything either skill would otherwise have needed to print, ask, or inform the operator about while running unattended in a loop. It replaced, in order: a Slack notification (abandoned — an org-side approval gate never let it post reliably from a looped session) and then a local markdown file at `~/.claude/jira-sprint-loops/activity.md` (superseded 2026-08-11 — that file's final content was copied into the artifact as its seed history and is no longer updated; treat it as a frozen archive, not the live log).
+
+**Artifact URL (fixed — do not change without re-publishing and updating both skills):**
+```
+https://claude.ai/code/artifact/bac6ed28-75cd-447e-a432-de42f8f3f07d
+```
+
+**Local mirror file:** `~/.claude/jira-sprint-loops/activity.html` — the working copy this skill reads, edits, and republishes. It always mirrors the artifact's current live content exactly; there is no other source of truth for "what's already in the artifact" besides this file, so never skip reading it before editing.
+
+1. **Compute the timestamp:** `date "+%Y-%m-%d %H:%M"` (standalone Bash). Capture as `TIMESTAMP`. Never print a literal placeholder here — always the real command output.
+2. **Read the local mirror** with the Read tool: `~/.claude/jira-sprint-loops/activity.html`. It should always exist (seeded 2026-08-11) — if it's genuinely missing, that's unexpected: print one warning line and skip publishing this run rather than guessing at replacement content; restore it by hand before the next run.
+3. **Build the new entry block.** This skill has two entry types:
+
+   **Queued-questions entry** (step 2a — fires before blocking, only when `QUESTIONS` is non-empty):
+   ```html
+   <article class="entry">
+     <div class="entry-head">
+       <span class="tag manager">jira-sprint-manager</span>
+       <span class="timestamp"><TIMESTAMP></span>
+     </div>
+     <div class="entry-body">
+       <p class="lead">Waiting on operator answer(s) before finishing this run:</p>
+       <ul>
+         <li><question 1></li>
+         <li><question 2></li>
+       </ul>
+     </div>
+   </article>
+   ```
+   One `<li>` per queued question, in the same order as the printed `## Questions` section.
+
+   **Run-completion entry** (step 4a — fires at the end of every run, unconditionally, plus the autonomous zero-actions short-circuit and the Jira-search-failure fallback):
+   ```html
+   <article class="entry">
+     <div class="entry-head">
+       <span class="tag manager">jira-sprint-manager</span>
+       <span class="timestamp"><TIMESTAMP></span>
+     </div>
+     <div class="entry-body">
+       <p class="logline">jira-sprint-manager: <N> ticket(s) acted on, <M> reminder(s)</p>
+       <p class="logline">Acted on: <TICKET1>, <TICKET2></p>
+     </div>
+   </article>
+   ```
+   Omit the second `<p class="logline">Acted on: …</p>` line entirely when `N == 0`. For the autonomous zero-actions case or the Jira-search-failure case, use the exact wording given at each of those call sites in place of the first line (still one `<p class="logline">`, no second line).
+4. **Insert it as the first child of `<div class="entries">`** — directly after that opening tag, before any existing `<article class="entry">`. Never append at the end; the artifact is newest-first.
+5. **Bump the entry count.** Find `<span><N> entries</span>` in the `.meta-strip` block and increment `N` by 1.
+6. **Write the updated file** back to `~/.claude/jira-sprint-loops/activity.html` with the Write tool — never shell redirection.
+7. **Publish it.** Call the `Artifact` tool with:
+   - `file_path`: `~/.claude/jira-sprint-loops/activity.html`
+   - `url`: the fixed artifact URL above (passing `url` updates the existing artifact in place — omitting it would create a separate, disconnected one)
+   - `favicon`: `📋` (keep identical every time — a changed favicon reads as a different page to anyone watching the tab)
+
+`jira-sprint-todo-loop` publishes to this same URL with its own entry template — see that skill's own SKILL.md.
 
 3. **If `QUESTIONS` is non-empty**, BLOCK and collect answers via `AskUserQuestion`. Each question carries its own option set. **Rule A never queues a question** (its TODO-MODE-priority check and its classic candidate walk are both plain, no-question transitions) — it's listed here only for completeness that it's absent:
    - **Rule B questions** — yes/no. Two possible question types per Live ticket (mutually exclusive — only one fires per ticket per run): the **Live QA pre-check kickoff** question (step 2b) and the **close-the-ticket** question (step 5b). Apply per the matching step in [references/rule-b-live-followup.md](references/rule-b-live-followup.md).
@@ -653,6 +733,11 @@ Order:
    Only AFTER all answers are collected and applied does the skill proceed to write the file.
 
 4. **Write the file** (Step 5).
+
+4a. **Publish a run-completion entry to the Activity artifact — every run, unconditionally, regardless of whether `QUESTIONS` was ever non-empty.** This is separate from (and in addition to) step 2a's pending-question entry: 2a records that the run is *waiting* on something (fires before blocking, only when there's a question); this step records that the run *finished*, always, so the operator has a complete record of every run even when nothing needed their input. Count `N` = number of tickets whose `actionsTaken` is non-empty this run, and `M` = length of `REMINDERS`. Follow **Activity log** below, using the "run-completion" entry template:
+   - `N > 0`: `jira-sprint-manager: <N> ticket(s) acted on, <M> reminder(s)` plus an `Acted on: <TICKET1>, <TICKET2>, …` line listing every ticket key with a non-empty `actionsTaken`.
+   - `N == 0`: `jira-sprint-manager: 0 tickets acted on, <M> reminder(s)` — omit the `Acted on:` line entirely.
+   - Prefix the first line with `(autonomous)` after the skill name (e.g. `jira-sprint-manager (autonomous): …`) when running in autonomous mode.
 
 5. **Release the run lock** (see "Run lock" near the top of this file) — this is the normal, successful end of the run; the lock must come off here before the final message.
 
@@ -684,6 +769,8 @@ Order:
 
 Operator: rerun this skill manually, or check the Atlassian MCP connection.
 ```
+
+**Publish a run-completion entry to the Activity artifact** (see "Activity log" above), using: `jira-sprint-manager: FAILED — could not fetch sprint data from Jira after 2 attempts`. This failure path ends the run just as much as a successful one does — the "every run" guarantee in step 4a applies here too, so the operator sees a failed run in the log instead of a silent gap.
 
 **Release the run lock** (see "Run lock" near the top of this file) before printing the final line — this failure path ends the run just as much as a successful one does, and the lock must not survive it. Print to terminal: `Sprint report FAILED — wrote error stub to <OUTPUT_PATH>.`
 

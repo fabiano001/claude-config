@@ -1,0 +1,74 @@
+# =============================================================================
+# New Spoke Intake Template
+# =============================================================================
+# Copy this file and fill in all required fields before running the validator.
+#
+# Usage:
+#   cp ../mobius-tools/docs/workflows/hub/new-spoke-intake.yaml /tmp/<spoke>-intake.yaml
+#   # Fill in all fields
+#   bash ../mobius-tools/scripts/validate-new-spoke-intake.sh /tmp/<spoke>-intake.yaml
+# =============================================================================
+
+# --- Intake Mode ---
+intake_mode: ""  # deterministic | ai-propose
+proposal_accepted: false
+
+# --- Spoke Identity ---
+spoke_name: ""            # Kebab-case, e.g., "bg-staging"
+aws_account_id: ""        # 12-digit AWS account ID
+aws_region: ""            # AWS region, e.g., "us-east-1"
+
+# --- Hub Assignment ---
+hub_name: ""              # Existing hub that will manage this spoke (e.g., "ops-qa")
+hub_aws_account_id: ""    # Hub's AWS account ID (for IAM trust)
+
+# --- Network & DNS ---
+dns_zone: ""              # Delegated DNS zone for spoke, e.g., "staging.svc.bgrp.io"
+cluster_name: ""          # Usually same as spoke_name, e.g., "bg-staging"
+
+# --- EKS Cluster ---
+eks_version: ""           # EKS Kubernetes version (match existing hubs, currently 1.33)
+eks_api_server_url: ""    # EKS API server URL (available after terragrunt apply)
+                          # Pattern: https://<hash>.gr7.<region>.eks.amazonaws.com
+
+# --- IAM Trust Chain ---
+# These roles are created in the spoke account via terragrunt
+argocd_access_role_arn: ""                # arn:aws:iam::<spoke-account>:role/argocd-access
+external_secrets_cross_account_role_arn: "" # arn:aws:iam::<spoke-account>:role/external-secrets-cross-account
+
+# --- Hub IRSA Updates ---
+# The hub's IRSA roles must be updated to trust the new spoke
+hub_argocd_hub_role: ""                   # Hub role that needs spoke account added
+hub_external_secrets_role: ""             # Hub ESO role that needs spoke trust
+
+# --- Terragrunt ---
+terragrunt_account_dir: ""  # e.g., "bg-staging" (under aws/accounts/)
+
+# --- Addon Overlays ---
+# Core addons to create overlays for in iac-eks-addons
+core_addons:
+  - cilium
+  - external-secrets
+  - external-dns
+  - cert-manager
+  - kyverno
+  - karpenter
+  - aws-load-balancer-controller
+  - reloader
+
+# --- Crossplane ---
+crossplane_terraform_env: true    # Create terraform/environments/<spoke>/ in iac-eks-crossplane
+crossplane_overlay: true          # Create argocd/crossplane/overlays/<spoke>/ (flat structure)
+
+# --- Monitoring ---
+monitoring_required: false  # Whether spoke needs its own monitoring environment (rare)
+
+# --- Verification Booleans ---
+aws_account_exists: false
+dns_zone_delegated: false
+eks_cluster_created: false
+irsa_roles_created: false
+spoke_iam_roles_created: false          # argocd-access + external-secrets-cross-account
+hub_irsa_updated: false                 # Hub registration updated with spoke account
+hub_spoke_account_ids_updated: false    # Hub terragrunt spoke_account_ids includes new spoke
+eks_api_server_url_known: false         # EKS API URL captured from terragrunt output

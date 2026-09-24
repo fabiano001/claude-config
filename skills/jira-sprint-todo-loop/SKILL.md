@@ -1,6 +1,6 @@
 ---
 name: jira-sprint-todo-loop
-description: Scans the operator's TO DO-column tickets on the Trident BG board (391), filters to the ones genuinely ready to start early (not flagged, no unfinished dependency, has ticket-creator's "Implementation Ready" comment marker), then for each qualifying ticket resolves its repos from ticket-creator's "Repos Involved" comment and mass-launches a backgrounded `/ticket-driver <TICKET> TODO-MODE` session per repo — each in its own new git worktree, named `<TICKET> - <CODE_NAME>` in the agent view. This is how implementation gets started on TO DO tickets ahead of sprint pickup, in bulk, unattended. Each run posts a short results summary (counts + launched ticket keys) to the `#fabi-jira-sprint-manager` Slack channel before exiting. Use when the operator asks to run jira-sprint-todo-loop, kick off ready TODO tickets, start implementation early on backlog tickets, or bulk-launch TODO-MODE ticket-driver runs. Does NOT generate the daily sprint report or run jira-sprint-manager's six lane-transition rules (that's `jira-sprint-manager`) and does NOT implement anything itself (that's `ticket-driver`, which this skill only dispatches).
+description: Scans the operator's TO DO-column tickets on the Trident BG board (391), filters to the ones genuinely ready to start early (not flagged, no unfinished dependency, has ticket-creator's "Implementation Ready" comment marker), then for each qualifying ticket resolves its repos from ticket-creator's "Repos Involved" comment and mass-launches a backgrounded `/ticket-driver <TICKET> TODO-MODE` session per repo — each in its own new git worktree, named `<TICKET> - <CODE_NAME>` in the agent view. This is how implementation gets started on TO DO tickets ahead of sprint pickup, in bulk, unattended. Any repo `ticket-creator` tagged `(new)` in its Repos Involved comment (doesn't exist yet) is bootstrapped first — local directory created, `create-boatsgroup-repo` skill invoked to create it on GitHub, initial README pushed as the first commit to `main` — before the normal worktree-creation flow runs against it. Each run publishes a short results summary (counts + launched ticket keys) as a new entry in a shared Claude Code Artifact — the Jira Sprint Loops Activity Log, also used by `jira-sprint-manager` — before exiting (an earlier Slack-notification attempt was abandoned when an org-side approval gate never let it post reliably from a looped session, and a later local-file version was superseded when the log moved to this artifact). Use when the operator asks to run jira-sprint-todo-loop, kick off ready TODO tickets, start implementation early on backlog tickets, or bulk-launch TODO-MODE ticket-driver runs. Does NOT generate the daily sprint report or run jira-sprint-manager's six lane-transition rules (that's `jira-sprint-manager`) and does NOT implement anything itself (that's `ticket-driver`, which this skill only dispatches).
 ---
 
 # Jira Sprint TODO Loop
@@ -18,7 +18,7 @@ A batch dispatcher. It never writes code, never talks to `git` beyond creating w
 - **Assignee accountId:** `5a6765563c7f1842c3d7b806` (Fabiano Desouza)
 - **TO DO column statuses:** `New`, `Backlog`, `Reopened` (same set `jira-sprint-manager`'s status-priority table uses)
 - **Flagged field:** `customfield_10091` — non-empty means flagged. **Never use the short name `flagged`** — on this instance it silently resolves to `null` for every ticket (the exact incident that's documented in `jira-sprint-manager/references/rule-a-kickoff.md`). Re-discovery procedure if this ever stops matching real flags: `mcp__atlassian__getJiraIssueTypeMetaWithFields`, look for a field named "Flagged" / schema `multicheckboxes` with `Impediment` as its only option.
-- **Known-repo list** (for validating names parsed out of comments): `portal-react-boattrader`, `webapp-react-trident`, `api-node-boats`, `api-node-boattrader`, `lambda-node-trident-700credit`, `lambda-node-trident-advertised-rates`, `lambda-node-trident-portal-lead`, `lambda-node-trident-partner-lender`, `pp-algorithm`, `configd`, `terraform-stack-trident`.
+- **Known-repo list** (for validating names parsed out of comments): `portal-react-boattrader`, `portal-nextjs-platform`, `webapp-react-trident`, `api-node-boats`, `api-node-boattrader`, `boatsdotcom`, `lambda-node-trident-700credit`, `lambda-node-trident-advertised-rates`, `lambda-node-trident-portal-lead`, `lambda-node-trident-partner-lender`, `lambda-node-trident-services`, `pp-algorithm`, `configd`, `terraform-stack-trident`.
 
 ## Workflow
 
@@ -46,8 +46,9 @@ Apply all three gates below to every fetched ticket. All three must pass. **Full
 
 **Full detail, exact commands, and the dependency-aware base-branch override — load [references/worktree-and-launch.md](references/worktree-and-launch.md).**
 
-1. Parse the **Repos Involved** comment (`This ticket will involve changes in these repos: <repo1>, <repo2>, ...`) — same marker `ticket-creator` posts and `jira-sprint-manager` Rule D already parses. No comment → skip this ticket with a clear note; never guess repos from ticket text.
+1. Parse the **Repos Involved** comment (`This ticket will involve changes in these repos: <repo1>, <repo2>, ...`) — same marker `ticket-creator` posts and `jira-sprint-manager` Rule D already parses, including its trailing `(new)` tag on any repo that doesn't exist yet (e.g. `lambda-node-trident-loan-recovery (new)`). No comment → skip this ticket with a clear note; never guess repos from ticket text.
 2. Check the ticket itself for a `Ticket Driver Implementation Started` or `Completed` comment — if present, skip it (something's already running or done; don't waste a worktree/session launch when `ticket-driver`'s own Guard would refuse anyway).
+2.5. For each repo tagged `(new)` whose directory doesn't exist yet at `~/BOATS-GROUP-PROJECTS-GITHUB/<repo>`: create the directory, invoke the `create-boatsgroup-repo` skill (wait for it to return the created repo's URL), then push an initial `README.md` as the first commit to `main` — see [references/worktree-and-launch.md](references/worktree-and-launch.md) "Bootstrap any repo tagged (new)" for the exact commands and failure handling. Once this lands, the repo is treated exactly like any pre-existing one for the rest of Step 3.
 3. For each resolved repo: create `~/BOATS-GROUP-PROJECTS-GITHUB/<repo>-<TICKET-KEY>` (skip + remind if it already exists), then launch:
    ```
    ~/.claude/skills/jira-sprint-manager/open-claude-session.sh \
@@ -75,21 +76,52 @@ Apply all three gates below to every fetched ticket. All three must pass. **Full
   ```
   <TICKET-KEY>: Didn't match ticket-driver TODO-MODE launching criteria because <specific reason>
   ```
-  `<specific reason>` is always one of: `flagged`; `depends on <DEP-KEY>, not yet implemented`; `no Implementation Ready marker`; `qualifies but no Repos Involved comment found`; `already has a Ticket Driver Implementation Started/Completed comment`.
+  `<specific reason>` is always one of: `flagged`; `depends on <DEP-KEY>, not yet implemented`; `no Implementation Ready marker`; `qualifies but no Repos Involved comment found`; `already has a Ticket Driver Implementation Started/Completed comment`; `repo <repo> tagged (new) but automated repo creation failed: <error>`; `repo <repo> tagged (new), created on GitHub, but first-commit push failed: <error> — resolve manually, then re-run`.
 
 Every ticket gets exactly one of these two lines — never zero, never both, never a vaguer third shape. A ticket with a per-repo failure partway through Step 3 (e.g. one of two repos failed `worktree add`) still counts as "launched" for this line if at least one repo succeeded — the partial failure was already surfaced live during Step 3's commentary, not swallowed, just not repeated here.
 
-**Immediately after the per-ticket disposition lines, before the final timestamp line — post a short Slack summary of this run.** Send one message via `mcp__claude_ai_Slack__slack_send_message` (`channel_id: "C0BMTSBK048"` — the `#fabi-jira-sprint-manager` channel, same one `jira-sprint-manager` itself posts to). Keep it very short — counts and launched ticket keys only, not the full per-ticket reasoning from the terminal report:
+**Immediately after the per-ticket disposition lines, before the final timestamp line — publish a short summary of this run to the shared Activity artifact.** (Two earlier versions of this step used other channels: a Slack post — abandoned 2026-08-10 after an org-side approval gate on `mcp__claude_ai_Slack__slack_send_message` never let it post reliably from a looped session — and a local markdown file at `~/.claude/jira-sprint-loops/activity.md` — superseded 2026-08-11 by the Claude Code Artifact this step now publishes to, using the exact same URL `jira-sprint-manager` also writes to.) Keep the logged summary short — counts and launched ticket keys only, not the full per-ticket reasoning already printed to the terminal:
 ```
 jira-sprint-todo-loop: <L> launched, <S> skipped
 Launched: <TICKET1> (<repo1>, <repo2>), <TICKET2> (<repo>)
 ```
 - If `L == 0`, omit the `Launched:` line entirely (just `jira-sprint-todo-loop: 0 launched, <S> skipped`).
-- If `S == 0`, still print `jira-sprint-todo-loop: <L> launched, 0 skipped`.
+- If `S == 0`, still include `jira-sprint-todo-loop: <L> launched, 0 skipped`.
 - This is a summary, not a duplicate of Step 4's per-ticket report — never list skip reasons here; the terminal/report already has that detail.
-- **If the Slack send fails** (bad channel id, auth error, network error): print one warning line and continue anyway — a failed notification must never block the run from finishing or printing its final timestamp line.
 
-**The very last line printed, after the Slack summary and immediately before the skill exits:**
+**How to publish it — Activity log (shared Claude Code Artifact, also used by `jira-sprint-manager`):**
+
+**Artifact URL (fixed — same one `jira-sprint-manager` publishes to):**
+```
+https://claude.ai/code/artifact/bac6ed28-75cd-447e-a432-de42f8f3f07d
+```
+
+**Local mirror file:** `~/.claude/jira-sprint-loops/activity.html` — read, edit, and republish this file; it's the only source of truth for the artifact's current content. (The earlier `~/.claude/jira-sprint-loops/activity.md` file is now a frozen archive — its final content was copied into the artifact as seed history on 2026-08-11 and is no longer updated by either skill.)
+
+1. `date "+%Y-%m-%d %H:%M"` (standalone Bash) → `TIMESTAMP`. Never print a literal placeholder — always the real command output (see the note on the final timestamp line below; the same rule applies here).
+2. **Read** `~/.claude/jira-sprint-loops/activity.html` with the Read tool. It should always exist (seeded 2026-08-11) — if it's genuinely missing, print one warning line and skip publishing this run rather than guessing at replacement content.
+3. **Build the new entry block:**
+   ```html
+   <article class="entry">
+     <div class="entry-head">
+       <span class="tag todoloop">jira-sprint-todo-loop</span>
+       <span class="timestamp"><TIMESTAMP></span>
+     </div>
+     <div class="entry-body">
+       <p class="logline">jira-sprint-todo-loop: <L> launched, <S> skipped</p>
+       <p class="logline">Launched: <TICKET1> (<repo1>, <repo2>), <TICKET2> (<repo>)</p>
+     </div>
+   </article>
+   ```
+   (Omit the second `<p class="logline">Launched: …</p>` line entirely when `L == 0`, same rule as the terminal summary above.)
+4. **Insert it as the first child of `<div class="entries">`** — directly after that opening tag, before any existing `<article class="entry">`. The artifact is newest-first; never append at the end.
+5. **Bump the entry count** — find `<span><N> entries</span>` in the `.meta-strip` block and increment `N` by 1.
+6. **Write** the updated file back to `~/.claude/jira-sprint-loops/activity.html` with the Write tool — never shell redirection.
+7. **Publish it** — call the `Artifact` tool with `file_path: ~/.claude/jira-sprint-loops/activity.html`, `url` set to the fixed artifact URL above, and `favicon: 📋` (identical every time).
+
+`jira-sprint-manager` uses the identical mechanism with its own entry template — see that skill's own SKILL.md for its exact entry content.
+
+**The very last line printed, after the activity-log entry is written and immediately before the skill exits:**
 ```
 jira-sprint-todo-loop run completed at <timestamp>
 ```

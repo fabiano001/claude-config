@@ -1,0 +1,326 @@
+# Mobius Platform Dependency Graph
+# This is the authoritative cross-repo dependency map.
+# Per-repo AGENTS.md frontmatter should match this file.
+# Run: scripts/validate-graph.sh to check for drift.
+#
+# Generated: 2026-07-16
+# Maintained by: mobius-tools (ecosystem SDK)
+
+version: "1.0"
+org: boatsgroup
+
+# Tier definitions:
+#   core          - ArgoCD hub and Crossplane composition factory
+#   infrastructure - Bootstrap (Terragrunt) and Terraform modules (IRSA, monitoring)
+#   gitops        - GitOps deployment repos (addons, observability) - NEW tier
+#   xrd           - KCL-based Crossplane XRD composition repos
+#   utility       - Developer tooling and shared resources
+#   application   - Application services (web apps, APIs, lambdas) deployed on the platform
+#   meta          - This SDK repo itself
+
+repos:
+  iac-eks-argocd:
+    role: "ArgoCD control plane hub — manages all EKS cluster addons via hub-spoke"
+    tier: core
+    github: "boatsgroup/iac-eks-argocd"
+    key_docs:
+      - CLAUDE.md
+    dependencies:
+      - iac-eks-addons
+      - iac-eks-observability
+      - iac-eks-crossplane
+
+  iac-eks-crossplane:
+    role: "Crossplane composition factory — providers, functions, and Configuration CRs"
+    tier: core
+    github: "boatsgroup/iac-eks-crossplane"
+    key_docs:
+      - CLAUDE.md
+      - .claude/ecosystem.md
+    dependencies:
+      - iac-eks-argocd
+
+  iac-eks-addons:
+    role: "GitOps EKS addons deployment — self-service addon manifests and Crossplane claims"
+    tier: gitops
+    github: "boatsgroup/iac-eks-addons"
+    key_docs:
+      - CLAUDE.md
+      - .claude/ecosystem.md
+    dependencies:
+      - iac-eks-argocd
+      - iac-eks-crossplane
+      - crossplane-xrd-irsa-role
+      - crossplane-xrd-karpenter-node-role
+      - crossplane-xrd-sqs-eventbridge
+      - crossplane-xrd-s3-bucket
+
+  iac-eks-observability:
+    role: "GitOps observability stack deployment — Prometheus, Grafana, Loki manifests"
+    tier: gitops
+    github: "boatsgroup/iac-eks-observability"
+    key_docs:
+      - docs/CLAUDE.md
+      - .claude/ecosystem.md
+    dependencies:
+      - iac-eks-argocd
+      - iac-eks-addons
+      - crossplane-xrd-irsa-role
+
+  iac-eks-atlantis:
+    role: "GitOps Atlantis deployment — Terraform PR automation via ArgoCD"
+    tier: gitops
+    github: "boatsgroup/iac-eks-atlantis"
+    key_docs:
+      - AGENTS.md
+      - CLAUDE.md
+      - .claude/ecosystem.md
+    dependencies:
+      - iac-eks-argocd
+      - iac-eks-crossplane
+      - crossplane-xrd-irsa-role
+
+  terraform-module-core-irsa:
+    role: "IRSA Terraform module (Terraform-only) — IAM Roles for Service Accounts"
+    tier: infrastructure
+    github: "boatsgroup/terraform-module-core-irsa"
+    key_docs:
+      - CLAUDE.md
+      - .claude/ecosystem.md
+    dependencies: []
+
+  terraform-stack-monitoring-ng:
+    role: "Monitoring Terraform infrastructure (Terraform-only) — Prometheus/Grafana/Loki Terraform resources"
+    tier: infrastructure
+    github: "boatsgroup/terraform-stack-monitoring-ng"
+    key_docs:
+      - docs/CLAUDE.md
+      - .claude/ecosystem.md
+    dependencies: []
+
+  terraform-module-eks:
+    role: "EKS cluster Terraform module — creates EKS clusters, OIDC providers, access entries, node groups"
+    tier: infrastructure
+    github: "boatsgroup/terraform-module-eks"
+    key_docs:
+      - README.md
+      - EKS_ACCESS_CONTROL.md
+      - EKS_UPGRADE_RUNBOOK.md
+    dependencies: []
+
+  terraform-module-delegated-zone:
+    role: "DNS delegation Terraform module — cross-account Route53 zones and ACM certificates"
+    tier: infrastructure
+    github: "boatsgroup/terraform-module-delegated-zone"
+    key_docs:
+      - README.md
+    dependencies: []
+
+  iac-terragrunt-core-infra:
+    role: "Bootstrap / provisioning — Terragrunt multi-account AWS EKS cluster deployment"
+    tier: infrastructure
+    github: "boatsgroup/iac-terragrunt-core-infra"
+    key_docs:
+      - CLAUDE.md
+      - .claude/ecosystem.md
+    dependencies:
+      - terraform-module-core-irsa
+      - terraform-module-eks
+      - terraform-module-delegated-zone
+      - iac-eks-argocd
+
+  crossplane-xrd-irsa-role:
+    role: "IAM Role XRD (most used) — KCL composition creating IRSA roles via Crossplane"
+    tier: xrd
+    github: "boatsgroup/crossplane-xrd-irsa-role"
+    key_docs:
+      - CLAUDE.md
+      - .claude/ecosystem.md
+      - definition.yaml
+      - kcl/main.k
+    dependencies:
+      - iac-eks-crossplane
+
+  crossplane-xrd-karpenter-node-role:
+    role: "Karpenter Node Role XRD — KCL composition creating node instance profiles"
+    tier: xrd
+    github: "boatsgroup/crossplane-xrd-karpenter-node-role"
+    key_docs:
+      - CLAUDE.md
+      - .claude/ecosystem.md
+      - definition.yaml
+      - kcl/main.k
+    dependencies:
+      - iac-eks-crossplane
+      - crossplane-xrd-irsa-role
+
+  crossplane-xrd-s3-bucket:
+    role: "S3 Bucket XRD — KCL composition for provisioning S3 buckets with standard config"
+    tier: xrd
+    github: "boatsgroup/crossplane-xrd-s3-bucket"
+    key_docs:
+      - CLAUDE.md
+      - .claude/ecosystem.md
+      - definition.yaml
+      - kcl/main.k
+    dependencies:
+      - iac-eks-crossplane
+
+  crossplane-xrd-sqs-eventbridge:
+    role: "SQS + EventBridge XRD — KCL composition for event-driven messaging infrastructure"
+    tier: xrd
+    github: "boatsgroup/crossplane-xrd-sqs-eventbridge"
+    key_docs:
+      - CLAUDE.md
+      - .claude/ecosystem.md
+      - definition.yaml
+      - kcl/main.k
+    dependencies:
+      - iac-eks-crossplane
+
+  crossplane-xrd-gateway-nlb-listener:
+    role: "Gateway NLB Listener XRD — KCL composition for NLB with TLS termination for Envoy Gateway"
+    tier: xrd
+    github: "boatsgroup/crossplane-xrd-gateway-nlb-listener"
+    key_docs:
+      - CLAUDE.md
+      - .claude/ecosystem.md
+      - definition.yaml
+      - kcl/main.k
+    dependencies:
+      - iac-eks-crossplane
+
+  crossplane-xrd-generated-aws-secret:
+    role: "Generated AWS Secret XRD — KCL composition for credential generation + Secrets Manager storage"
+    tier: xrd
+    github: "boatsgroup/crossplane-xrd-generated-aws-secret"
+    key_docs:
+      - CLAUDE.md
+      - .claude/ecosystem.md
+      - definition.yaml
+      - kcl/main.k
+    dependencies:
+      - iac-eks-crossplane
+
+  crossplane-xrd-github-oidc:
+    role: "GitHub OIDC XRD — KCL composition for GitHub Actions OIDC federation with AWS IAM"
+    tier: xrd
+    github: "boatsgroup/crossplane-xrd-github-oidc"
+    key_docs:
+      - CLAUDE.md
+      - .claude/ecosystem.md
+      - definition.yaml
+      - kcl/main.k
+    dependencies:
+      - iac-eks-crossplane
+
+  crossplane-xrd-ingress-acm-certificate:
+    role: "ACM Certificate XRD — KCL composition for ACM certificates attached to ALB Ingress"
+    tier: xrd
+    github: "boatsgroup/crossplane-xrd-ingress-acm-certificate"
+    key_docs:
+      - CLAUDE.md
+      - .claude/ecosystem.md
+      - definition.yaml
+      - kcl/main.k
+    dependencies:
+      - iac-eks-crossplane
+
+  crossplane-xrd-cloudwatch-log-group:
+    role: "CloudWatch Log Group XRD — KCL composition for CloudWatch Logs log groups with retention and optional KMS encryption"
+    tier: xrd
+    github: "boatsgroup/crossplane-xrd-cloudwatch-log-group"
+    key_docs:
+      - CLAUDE.md
+      - .claude/ecosystem.md
+      - definition.yaml
+      - kcl/main.k
+    dependencies:
+      - iac-eks-crossplane
+
+  crossplane-xrd-emr-virtual-cluster:
+    role: "EMR Virtual Cluster XRD — KCL composition for EMR on EKS virtual clusters (namespace + virtual cluster registration)"
+    tier: xrd
+    github: "boatsgroup/crossplane-xrd-emr-virtual-cluster"
+    key_docs:
+      - CLAUDE.md
+      - .claude/ecosystem.md
+      - definition.yaml
+      - kcl/main.k
+    dependencies:
+      - iac-eks-crossplane
+
+  crossplane-xrd-emr-job-execution-role:
+    role: "EMR Job Execution Role XRD — KCL composition for the IAM role EMR on EKS Spark jobs assume (EKS Pod Identity trust)"
+    tier: xrd
+    github: "boatsgroup/crossplane-xrd-emr-job-execution-role"
+    key_docs:
+      - CLAUDE.md
+      - .claude/ecosystem.md
+      - definition.yaml
+      - kcl/main.k
+    dependencies:
+      - iac-eks-crossplane
+
+  argocd-env-generator:
+    role: "Environment generation CLI — Go tool that stamps out complete multi-repo environment overlays"
+    tier: utility
+    github: "boatsgroup/argocd-env-generator"
+    key_docs:
+      - CLAUDE.md
+      - .claude/ecosystem.md
+    dependencies:
+      - iac-eks-argocd
+
+  helm-charts:
+    role: "Shared Helm charts — Common Helm chart configurations used across EKS clusters"
+    tier: utility
+    github: "boatsgroup/helm-charts"
+    key_docs:
+      - CLAUDE.md
+      - .claude/ecosystem.md
+    dependencies: []
+
+  iac-eks-pcg:
+    role: "Centralized code intelligence — CGC MCP server indexing all boatsgroup repos"
+    tier: utility
+    github: "boatsgroup/iac-eks-pcg"
+    key_docs:
+      - CLAUDE.md
+      - chart/values.yaml
+    dependencies:
+      - iac-eks-argocd
+
+  react-common-components:
+    role: "Shared React ad-container component library — RenderHTML, SeoContent, WordsmithContent for web properties"
+    tier: utility
+    github: "boatsgroup/react-common-components"
+    key_docs:
+      - AGENTS.md
+      - .claude/ecosystem.md
+      - docs/architecture.md
+      - docs/dependencies.md
+    dependencies: []
+
+  mobius-tools:
+    role: "Ecosystem SDK — Central tooling, resolver scripts, docs, and ecosystem map"
+    tier: meta
+    github: "boatsgroup/mobius-tools"
+    key_docs:
+      - AGENTS.md
+      - ecosystem/master-map.md
+      - ecosystem/dependency-graph.yaml
+      - docs/onboarding.md
+      - docs/architecture.md
+    dependencies: []
+
+  webapp-node-fsbo:
+    role: "FSBO whitelabel web application — multi-portal boat seller listing, checkout, and management"
+    tier: application
+    github: "boatsgroup/webapp-node-fsbo"
+    key_docs:
+      - AGENTS.md
+      - .claude/ecosystem.md
+      - docs/service-guide.md
+      - docs/dependencies.md
+    dependencies: []
