@@ -12,6 +12,8 @@ The response contains at least ONE ticket whose `fields.status.name` is in:
 
 ## Per-Testing-ticket handling (apply in board order — top of the TESTING lane first)
 
+0. **Universal flag gate (runs first, before anything else, for every Testing ticket).** Check `fields.customfield_10091` (see SKILL.md Step 2 for the pinned field id and the 2026-05-20 incident — never use the short name `flagged`). If non-empty, this ticket is a complete no-op for Rule E this run: do not fetch comments, do not queue a question, do not transition anything. Append exactly one `REMINDERS` entry: `"<TICKET-KEY> is flagged (impediment) — Rule E made no changes, actions, or transitions. Clear the flag or unblock the impediment before next run if it's now actionable."` Then move on to the next Testing ticket.
+
 1. **Fetch the ticket's comments, description, and summary.** Use `mcp__atlassian__getJiraIssue` with:
    - `cloudId`: `ba2e3477-a4e5-4924-a530-47c471494d0f`
    - `issueIdOrKey`: the ticket key
@@ -67,13 +69,16 @@ The response contains at least ONE ticket whose `fields.status.name` is in:
 
 3. **Determine the target repo** for `gh pr list`. Match the ticket's `description` + `summary` text (case-insensitive) against the known-repo list from Rule D step 4 (in priority order — more specific names first):
    - `portal-react-boattrader`
+   - `portal-nextjs-platform`
    - `webapp-react-trident`
    - `api-node-boats`
    - `api-node-boattrader`
+   - `boatsdotcom`
    - `lambda-node-trident-700credit`
    - `lambda-node-trident-advertised-rates`
    - `lambda-node-trident-portal-lead`
    - `lambda-node-trident-partner-lender`
+   - `lambda-node-trident-services`
    - `pp-algorithm`
    - `configd`
    - `terraform-stack-trident`

@@ -1,0 +1,114 @@
+service_name: "api-node-payments"
+cluster: "node10"
+profile: "bg-qa"
+region: "us-east-1"
+
+target_namespace: "api-node"
+target_environments:
+  - bg-qa
+  - bg-prod
+
+intake_mode: "deterministic"
+proposal_accepted: false
+
+task_definition_arn: "arn:aws:ecs:us-east-1:123456789012:task-definition/api-node-payments:42"
+image_repository: "123456789012.dkr.ecr.us-east-1.amazonaws.com/api-node-payments"
+image_tag: "1.2.3"
+ecs_cpu: "256"
+ecs_memory: "512"
+ecs_memory_reservation: "256"
+
+container_port: "3000"
+health_check_path: "/health"
+health_check_interval: "30"
+health_check_timeout: "5"
+healthy_threshold: "2"
+unhealthy_threshold: "3"
+health_check_grace_period: "60"
+
+env_vars:
+  - PORT
+  - AWS_REGION
+  - NODE_ENV
+
+ssm_paths:
+  - /bg/qa/api-node-payments/db-password
+  - /bg/qa/api-node-payments/api-key
+
+task_role_arn: "arn:aws:iam::123456789012:role/ecs/node10-api-node-payments"
+task_role_name: "ecs/node10-api-node-payments"
+
+iam_policy_statements:
+  - effect: Allow
+    actions:
+      - ssm:GetParameter
+      - ssm:GetParameters
+      - ssm:GetParametersByPath
+    resources:
+      - "arn:aws:ssm:us-east-1:AWS_ACCOUNT_ID:parameter/bg/qa/api-node-payments/*"
+
+desired_count: "2"
+anti_affinity: "soft-hostname"
+pdb_max_unavailable: "1"
+deployment_strategy: "RollingUpdate"
+scaling_enabled: true
+scaling_min_capacity: "2"
+scaling_max_capacity: "10"
+scaling_cpu_target: "70"
+scaling_memory_target: ""
+scaling_type: "target-tracking"
+
+has_load_balancer: true
+target_group_arn: "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/api-node-payments/abc123"
+alb_arn: "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/api-alb/def456"
+
+listener_rule_count: 0
+listener_rules_redirect: 0
+listener_rules_forward: 0
+listener_rules_lambda: 0
+listener_rules_default: 0
+
+sidecars_detected:
+  - xray-daemon
+
+sidecars_to_drop:
+  - xray-daemon
+
+sidecars_unknown: []
+
+service_family: "api-node"
+chart_template: "helm-charts/charts/api-node-template"
+
+eks_namespace: "api-node"
+appset_group: "app-workloads"
+argocd_project: "app-workloads"
+
+k8s_cpu_request: "256m"
+k8s_cpu_limit: ""
+k8s_memory_request: "256Mi"
+k8s_memory_limit: "512Mi"
+
+hpa_enabled: true
+hpa_min_replicas: "2"
+hpa_max_replicas: "10"
+hpa_cpu_target: "70"
+hpa_memory_target: ""
+
+gateway_enabled: true
+gateway_hostname: "api-node-payments.qa.svc.bgrp.io"
+
+compatibility_classification: "fully-compatible"
+
+blockers: []
+
+hybrid_fields: []
+
+extraction_completed: true
+mapping_applied: true
+classification_completed: true
+hybrid_fields_reviewed: true
+blockers_resolved: true
+
+proposal_timestamp: ""
+proposal_confidence: ""
+proposal_notes: ""

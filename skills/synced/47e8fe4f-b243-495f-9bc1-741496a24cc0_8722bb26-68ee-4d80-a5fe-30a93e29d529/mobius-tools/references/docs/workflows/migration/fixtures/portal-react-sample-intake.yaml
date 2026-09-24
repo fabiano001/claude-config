@@ -1,0 +1,103 @@
+service_name: "portal-react-dashboard"
+cluster: "node10"
+profile: "bg-qa"
+region: "us-east-1"
+
+target_namespace: "portal-react"
+target_environments:
+  - bg-qa
+  - bg-prod
+
+intake_mode: "deterministic"
+proposal_accepted: false
+
+task_definition_arn: "arn:aws:ecs:us-east-1:123456789012:task-definition/portal-react-dashboard:15"
+image_repository: "123456789012.dkr.ecr.us-east-1.amazonaws.com/portal-react-dashboard"
+image_tag: "2.1.0"
+ecs_cpu: "256"
+ecs_memory: "512"
+ecs_memory_reservation: "256"
+
+container_port: "80"
+health_check_path: "/"
+health_check_interval: "30"
+health_check_timeout: "5"
+healthy_threshold: "2"
+unhealthy_threshold: "3"
+health_check_grace_period: "30"
+
+env_vars:
+  - PORT
+  - NODE_ENV
+  - API_BASE_URL
+
+ssm_paths: []
+
+task_role_arn: ""
+task_role_name: ""
+
+iam_policy_statements: []
+
+desired_count: "2"
+anti_affinity: "soft-hostname"
+pdb_max_unavailable: "1"
+deployment_strategy: "RollingUpdate"
+scaling_enabled: false
+scaling_min_capacity: ""
+scaling_max_capacity: ""
+scaling_cpu_target: ""
+scaling_memory_target: ""
+scaling_type: "none"
+
+has_load_balancer: true
+target_group_arn: "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/portal-dashboard/xyz789"
+alb_arn: "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/portal-alb/ghi012"
+
+listener_rule_count: 0
+listener_rules_redirect: 0
+listener_rules_forward: 0
+listener_rules_lambda: 0
+listener_rules_default: 0
+
+sidecars_detected: []
+
+sidecars_to_drop: []
+
+sidecars_unknown: []
+
+service_family: "portal-react"
+chart_template: "helm-charts/charts/portal-react-template"
+
+eks_namespace: "portal-react"
+appset_group: "app-workloads"
+argocd_project: "app-workloads"
+
+k8s_cpu_request: "256m"
+k8s_cpu_limit: ""
+k8s_memory_request: "256Mi"
+k8s_memory_limit: "512Mi"
+
+hpa_enabled: false
+hpa_min_replicas: ""
+hpa_max_replicas: ""
+hpa_cpu_target: ""
+hpa_memory_target: ""
+
+gateway_enabled: true
+gateway_hostname: "portal-react-dashboard.qa.svc.bgrp.io"
+
+compatibility_classification: "fully-compatible"
+
+blockers: []
+
+hybrid_fields: []
+
+extraction_completed: true
+mapping_applied: true
+classification_completed: true
+hybrid_fields_reviewed: true
+blockers_resolved: true
+
+proposal_timestamp: ""
+proposal_confidence: ""
+proposal_notes: ""

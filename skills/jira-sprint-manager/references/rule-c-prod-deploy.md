@@ -16,6 +16,8 @@ The operator MUST explicitly approve the plan via the 3-option question below be
 
 ## Per-prod-ready-ticket handling (apply in board order — top of the PROD READY lane first)
 
+0. **Universal flag gate (runs first, before anything else, for every ticket including one reached via the Rule F → Rule C chain).** Check `fields.customfield_10091` (see SKILL.md Step 2 for the pinned field id and the 2026-05-20 incident — never use the short name `flagged`). If non-empty, this ticket is a complete no-op for Rule C this run: do not fetch deployment notes, do not call `gh`, do not merge, do not transition, do not post to Slack or Jira. Append exactly one `REMINDERS` entry: `"<TICKET-KEY> is flagged (impediment) — Rule C made no changes, actions, or transitions. Clear the flag or unblock the impediment before next run if it's now actionable."` Then move on to the next PROD READY ticket. This applies even to a chained ticket — re-check the flag on it; do not assume Rule F already verified it.
+
 1. **Fetch deployment instructions.** Use `mcp__atlassian__getJiraIssue` with:
    - `cloudId`: `ba2e3477-a4e5-4924-a530-47c471494d0f`
    - `issueIdOrKey`: the ticket key

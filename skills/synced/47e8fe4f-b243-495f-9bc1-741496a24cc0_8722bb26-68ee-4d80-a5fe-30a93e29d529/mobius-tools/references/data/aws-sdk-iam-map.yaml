@@ -1,0 +1,774 @@
+schema_version: "1.0"
+last_updated: "2026-03-17"
+description: "AWS SDK method-to-IAM-action mapping for cloud dependency scanning"
+
+services:
+  s3:
+    iam_prefix: "s3"
+    resource_arn_pattern: "arn:aws:s3:::${bucket}/*"
+    operations:
+      PutObject:
+        iam_action: "s3:PutObject"
+        sdk_patterns:
+          typescript: ["PutObjectCommand"]
+          java: ["putObject", "PutObjectRequest"]
+          python: ["put_object"]
+          go: ["PutObject"]
+          rust: ["put_object"]
+      GetObject:
+        iam_action: "s3:GetObject"
+        sdk_patterns:
+          typescript: ["GetObjectCommand"]
+          java: ["getObject", "GetObjectRequest"]
+          python: ["get_object"]
+          go: ["GetObject"]
+          rust: ["get_object"]
+      DeleteObject:
+        iam_action: "s3:DeleteObject"
+        sdk_patterns:
+          typescript: ["DeleteObjectCommand"]
+          java: ["deleteObject", "DeleteObjectRequest"]
+          python: ["delete_object"]
+          go: ["DeleteObject"]
+          rust: ["delete_object"]
+      HeadObject:
+        iam_action: "s3:GetObject"
+        sdk_patterns:
+          typescript: ["HeadObjectCommand"]
+          java: ["headObject", "HeadObjectRequest"]
+          python: ["head_object"]
+          go: ["HeadObject"]
+          rust: ["head_object"]
+      CopyObject:
+        iam_action: "s3:PutObject"
+        sdk_patterns:
+          typescript: ["CopyObjectCommand"]
+          java: ["copyObject", "CopyObjectRequest"]
+          python: ["copy_object"]
+          go: ["CopyObject"]
+          rust: ["copy_object"]
+      ListObjectsV2:
+        iam_action: "s3:ListBucket"
+        resource_arn_pattern: "arn:aws:s3:::${bucket}"
+        sdk_patterns:
+          typescript: ["ListObjectsV2Command"]
+          java: ["listObjectsV2", "ListObjectsV2Request"]
+          python: ["list_objects_v2"]
+          go: ["ListObjectsV2"]
+          rust: ["list_objects_v2"]
+      HeadBucket:
+        iam_action: "s3:ListBucket"
+        resource_arn_pattern: "arn:aws:s3:::${bucket}"
+        sdk_patterns:
+          typescript: ["HeadBucketCommand"]
+          java: ["headBucket", "HeadBucketRequest"]
+          python: ["head_bucket"]
+          go: ["HeadBucket"]
+          rust: ["head_bucket"]
+      CreateBucket:
+        iam_action: "s3:CreateBucket"
+        resource_arn_pattern: "arn:aws:s3:::${bucket}"
+        sdk_patterns:
+          typescript: ["CreateBucketCommand"]
+          java: ["createBucket", "CreateBucketRequest"]
+          python: ["create_bucket"]
+          go: ["CreateBucket"]
+          rust: ["create_bucket"]
+      DeleteBucket:
+        iam_action: "s3:DeleteBucket"
+        resource_arn_pattern: "arn:aws:s3:::${bucket}"
+        sdk_patterns:
+          typescript: ["DeleteBucketCommand"]
+          java: ["deleteBucket", "DeleteBucketRequest"]
+          python: ["delete_bucket"]
+          go: ["DeleteBucket"]
+          rust: ["delete_bucket"]
+
+  sns:
+    iam_prefix: "sns"
+    resource_arn_pattern: "arn:aws:sns:${region}:${account}:${topic-name}"
+    operations:
+      Publish:
+        iam_action: "sns:Publish"
+        sdk_patterns:
+          typescript: ["PublishCommand"]
+          java: ["publish", "PublishRequest"]
+          python: ["publish"]
+          go: ["Publish"]
+          rust: ["publish"]
+      PublishBatch:
+        iam_action: "sns:Publish"
+        sdk_patterns:
+          typescript: ["PublishBatchCommand"]
+          java: ["publishBatch", "PublishBatchRequest"]
+          python: ["publish_batch"]
+          go: ["PublishBatch"]
+          rust: ["publish_batch"]
+      CreateTopic:
+        iam_action: "sns:CreateTopic"
+        sdk_patterns:
+          typescript: ["CreateTopicCommand"]
+          java: ["createTopic", "CreateTopicRequest"]
+          python: ["create_topic"]
+          go: ["CreateTopic"]
+          rust: ["create_topic"]
+      Subscribe:
+        iam_action: "sns:Subscribe"
+        sdk_patterns:
+          typescript: ["SubscribeCommand"]
+          java: ["subscribe", "SubscribeRequest"]
+          python: ["subscribe"]
+          go: ["Subscribe"]
+          rust: ["subscribe"]
+      GetTopicAttributes:
+        iam_action: "sns:GetTopicAttributes"
+        sdk_patterns:
+          typescript: ["GetTopicAttributesCommand"]
+          java: ["getTopicAttributes", "GetTopicAttributesRequest"]
+          python: ["get_topic_attributes"]
+          go: ["GetTopicAttributes"]
+          rust: ["get_topic_attributes"]
+      DeleteTopic:
+        iam_action: "sns:DeleteTopic"
+        sdk_patterns:
+          typescript: ["DeleteTopicCommand"]
+          java: ["deleteTopic", "DeleteTopicRequest"]
+          python: ["delete_topic"]
+          go: ["DeleteTopic"]
+          rust: ["delete_topic"]
+      ListTopics:
+        iam_action: "sns:ListTopics"
+        resource_arn_pattern: "arn:aws:sns:${region}:${account}:*"
+        sdk_patterns:
+          typescript: ["ListTopicsCommand"]
+          java: ["listTopics", "ListTopicsRequest"]
+          python: ["list_topics"]
+          go: ["ListTopics"]
+          rust: ["list_topics"]
+
+  sqs:
+    iam_prefix: "sqs"
+    resource_arn_pattern: "arn:aws:sqs:${region}:${account}:${queue-name}"
+    operations:
+      SendMessage:
+        iam_action: "sqs:SendMessage"
+        sdk_patterns:
+          typescript: ["SendMessageCommand"]
+          java: ["sendMessage", "SendMessageRequest"]
+          python: ["send_message"]
+          go: ["SendMessage"]
+          rust: ["send_message"]
+      ReceiveMessage:
+        iam_action: "sqs:ReceiveMessage"
+        sdk_patterns:
+          typescript: ["ReceiveMessageCommand"]
+          java: ["receiveMessage", "ReceiveMessageRequest"]
+          python: ["receive_message"]
+          go: ["ReceiveMessage"]
+          rust: ["receive_message"]
+      DeleteMessage:
+        iam_action: "sqs:DeleteMessage"
+        sdk_patterns:
+          typescript: ["DeleteMessageCommand"]
+          java: ["deleteMessage", "DeleteMessageRequest"]
+          python: ["delete_message"]
+          go: ["DeleteMessage"]
+          rust: ["delete_message"]
+      ChangeMessageVisibility:
+        iam_action: "sqs:ChangeMessageVisibility"
+        sdk_patterns:
+          typescript: ["ChangeMessageVisibilityCommand"]
+          java: ["changeMessageVisibility", "ChangeMessageVisibilityRequest"]
+          python: ["change_message_visibility"]
+          go: ["ChangeMessageVisibility"]
+          rust: ["change_message_visibility"]
+      CreateQueue:
+        iam_action: "sqs:CreateQueue"
+        sdk_patterns:
+          typescript: ["CreateQueueCommand"]
+          java: ["createQueue", "CreateQueueRequest"]
+          python: ["create_queue"]
+          go: ["CreateQueue"]
+          rust: ["create_queue"]
+      DeleteQueue:
+        iam_action: "sqs:DeleteQueue"
+        sdk_patterns:
+          typescript: ["DeleteQueueCommand"]
+          java: ["deleteQueue", "DeleteQueueRequest"]
+          python: ["delete_queue"]
+          go: ["DeleteQueue"]
+          rust: ["delete_queue"]
+      GetQueueAttributes:
+        iam_action: "sqs:GetQueueAttributes"
+        sdk_patterns:
+          typescript: ["GetQueueAttributesCommand"]
+          java: ["getQueueAttributes", "GetQueueAttributesRequest"]
+          python: ["get_queue_attributes"]
+          go: ["GetQueueAttributes"]
+          rust: ["get_queue_attributes"]
+      GetQueueUrl:
+        iam_action: "sqs:GetQueueUrl"
+        sdk_patterns:
+          typescript: ["GetQueueUrlCommand"]
+          java: ["getQueueUrl", "GetQueueUrlRequest"]
+          python: ["get_queue_url"]
+          go: ["GetQueueUrl"]
+          rust: ["get_queue_url"]
+      SetQueueAttributes:
+        iam_action: "sqs:SetQueueAttributes"
+        sdk_patterns:
+          typescript: ["SetQueueAttributesCommand"]
+          java: ["setQueueAttributes", "SetQueueAttributesRequest"]
+          python: ["set_queue_attributes"]
+          go: ["SetQueueAttributes"]
+          rust: ["set_queue_attributes"]
+      PurgeQueue:
+        iam_action: "sqs:PurgeQueue"
+        sdk_patterns:
+          typescript: ["PurgeQueueCommand"]
+          java: ["purgeQueue", "PurgeQueueRequest"]
+          python: ["purge_queue"]
+          go: ["PurgeQueue"]
+          rust: ["purge_queue"]
+
+  kinesis:
+    iam_prefix: "kinesis"
+    resource_arn_pattern: "arn:aws:kinesis:${region}:${account}:stream/${stream-name}"
+    operations:
+      PutRecord:
+        iam_action: "kinesis:PutRecord"
+        sdk_patterns:
+          typescript: ["PutRecordCommand"]
+          java: ["putRecord", "PutRecordRequest"]
+          python: ["put_record"]
+          go: ["PutRecord"]
+          rust: ["put_record"]
+      PutRecords:
+        iam_action: "kinesis:PutRecords"
+        sdk_patterns:
+          typescript: ["PutRecordsCommand"]
+          java: ["putRecords", "PutRecordsRequest"]
+          python: ["put_records"]
+          go: ["PutRecords"]
+          rust: ["put_records"]
+      GetRecords:
+        iam_action: "kinesis:GetRecords"
+        sdk_patterns:
+          typescript: ["GetRecordsCommand"]
+          java: ["getRecords", "GetRecordsRequest"]
+          python: ["get_records"]
+          go: ["GetRecords"]
+          rust: ["get_records"]
+      GetShardIterator:
+        iam_action: "kinesis:GetShardIterator"
+        sdk_patterns:
+          typescript: ["GetShardIteratorCommand"]
+          java: ["getShardIterator", "GetShardIteratorRequest"]
+          python: ["get_shard_iterator"]
+          go: ["GetShardIterator"]
+          rust: ["get_shard_iterator"]
+      DescribeStream:
+        iam_action: "kinesis:DescribeStream"
+        sdk_patterns:
+          typescript: ["DescribeStreamCommand"]
+          java: ["describeStream", "DescribeStreamRequest"]
+          python: ["describe_stream"]
+          go: ["DescribeStream"]
+          rust: ["describe_stream"]
+      ListStreams:
+        iam_action: "kinesis:ListStreams"
+        resource_arn_pattern: "arn:aws:kinesis:${region}:${account}:stream/*"
+        sdk_patterns:
+          typescript: ["ListStreamsCommand"]
+          java: ["listStreams", "ListStreamsRequest"]
+          python: ["list_streams"]
+          go: ["ListStreams"]
+          rust: ["list_streams"]
+      CreateStream:
+        iam_action: "kinesis:CreateStream"
+        sdk_patterns:
+          typescript: ["CreateStreamCommand"]
+          java: ["createStream", "CreateStreamRequest"]
+          python: ["create_stream"]
+          go: ["CreateStream"]
+          rust: ["create_stream"]
+
+  firehose:
+    iam_prefix: "firehose"
+    resource_arn_pattern: "arn:aws:firehose:${region}:${account}:deliverystream/${delivery-stream}"
+    operations:
+      PutRecord:
+        iam_action: "firehose:PutRecord"
+        sdk_patterns:
+          typescript: ["PutRecordCommand"]
+          java: ["putRecord", "PutRecordRequest"]
+          python: ["put_record"]
+          go: ["PutRecord"]
+          rust: ["put_record"]
+      PutRecordBatch:
+        iam_action: "firehose:PutRecordBatch"
+        sdk_patterns:
+          typescript: ["PutRecordBatchCommand"]
+          java: ["putRecordBatch", "PutRecordBatchRequest"]
+          python: ["put_record_batch"]
+          go: ["PutRecordBatch"]
+          rust: ["put_record_batch"]
+      DescribeDeliveryStream:
+        iam_action: "firehose:DescribeDeliveryStream"
+        sdk_patterns:
+          typescript: ["DescribeDeliveryStreamCommand"]
+          java: ["describeDeliveryStream", "DescribeDeliveryStreamRequest"]
+          python: ["describe_delivery_stream"]
+          go: ["DescribeDeliveryStream"]
+          rust: ["describe_delivery_stream"]
+      ListDeliveryStreams:
+        iam_action: "firehose:ListDeliveryStreams"
+        resource_arn_pattern: "arn:aws:firehose:${region}:${account}:deliverystream/*"
+        sdk_patterns:
+          typescript: ["ListDeliveryStreamsCommand"]
+          java: ["listDeliveryStreams", "ListDeliveryStreamsRequest"]
+          python: ["list_delivery_streams"]
+          go: ["ListDeliveryStreams"]
+          rust: ["list_delivery_streams"]
+
+  dynamodb:
+    iam_prefix: "dynamodb"
+    resource_arn_pattern: "arn:aws:dynamodb:${region}:${account}:table/${table-name}"
+    operations:
+      PutItem:
+        iam_action: "dynamodb:PutItem"
+        sdk_patterns:
+          typescript: ["PutItemCommand"]
+          java: ["putItem", "PutItemRequest"]
+          python: ["put_item"]
+          go: ["PutItem"]
+          rust: ["put_item"]
+      GetItem:
+        iam_action: "dynamodb:GetItem"
+        sdk_patterns:
+          typescript: ["GetItemCommand"]
+          java: ["getItem", "GetItemRequest"]
+          python: ["get_item"]
+          go: ["GetItem"]
+          rust: ["get_item"]
+      DeleteItem:
+        iam_action: "dynamodb:DeleteItem"
+        sdk_patterns:
+          typescript: ["DeleteItemCommand"]
+          java: ["deleteItem", "DeleteItemRequest"]
+          python: ["delete_item"]
+          go: ["DeleteItem"]
+          rust: ["delete_item"]
+      UpdateItem:
+        iam_action: "dynamodb:UpdateItem"
+        sdk_patterns:
+          typescript: ["UpdateItemCommand"]
+          java: ["updateItem", "UpdateItemRequest"]
+          python: ["update_item"]
+          go: ["UpdateItem"]
+          rust: ["update_item"]
+      Query:
+        iam_action: "dynamodb:Query"
+        sdk_patterns:
+          typescript: ["QueryCommand"]
+          java: ["query", "QueryRequest"]
+          python: ["query"]
+          go: ["Query"]
+          rust: ["query"]
+      Scan:
+        iam_action: "dynamodb:Scan"
+        sdk_patterns:
+          typescript: ["ScanCommand"]
+          java: ["scan", "ScanRequest"]
+          python: ["scan"]
+          go: ["Scan"]
+          rust: ["scan"]
+      CreateTable:
+        iam_action: "dynamodb:CreateTable"
+        sdk_patterns:
+          typescript: ["CreateTableCommand"]
+          java: ["createTable", "CreateTableRequest"]
+          python: ["create_table"]
+          go: ["CreateTable"]
+          rust: ["create_table"]
+      DescribeTable:
+        iam_action: "dynamodb:DescribeTable"
+        sdk_patterns:
+          typescript: ["DescribeTableCommand"]
+          java: ["describeTable", "DescribeTableRequest"]
+          python: ["describe_table"]
+          go: ["DescribeTable"]
+          rust: ["describe_table"]
+      BatchWriteItem:
+        iam_action: "dynamodb:BatchWriteItem"
+        sdk_patterns:
+          typescript: ["BatchWriteItemCommand"]
+          java: ["batchWriteItem", "BatchWriteItemRequest"]
+          python: ["batch_write_item"]
+          go: ["BatchWriteItem"]
+          rust: ["batch_write_item"]
+      BatchGetItem:
+        iam_action: "dynamodb:BatchGetItem"
+        sdk_patterns:
+          typescript: ["BatchGetItemCommand"]
+          java: ["batchGetItem", "BatchGetItemRequest"]
+          python: ["batch_get_item"]
+          go: ["BatchGetItem"]
+          rust: ["batch_get_item"]
+
+  lambda:
+    iam_prefix: "lambda"
+    resource_arn_pattern: "arn:aws:lambda:${region}:${account}:function:${function-name}"
+    operations:
+      Invoke:
+        iam_action: "lambda:InvokeFunction"
+        sdk_patterns:
+          typescript: ["InvokeCommand"]
+          java: ["invoke", "InvokeRequest"]
+          python: ["invoke"]
+          go: ["Invoke"]
+          rust: ["invoke"]
+      GetFunction:
+        iam_action: "lambda:GetFunction"
+        sdk_patterns:
+          typescript: ["GetFunctionCommand"]
+          java: ["getFunction", "GetFunctionRequest"]
+          python: ["get_function"]
+          go: ["GetFunction"]
+          rust: ["get_function"]
+      ListFunctions:
+        iam_action: "lambda:ListFunctions"
+        resource_arn_pattern: "arn:aws:lambda:${region}:${account}:function:*"
+        sdk_patterns:
+          typescript: ["ListFunctionsCommand"]
+          java: ["listFunctions", "ListFunctionsRequest"]
+          python: ["list_functions"]
+          go: ["ListFunctions"]
+          rust: ["list_functions"]
+      CreateFunction:
+        iam_action: "lambda:CreateFunction"
+        sdk_patterns:
+          typescript: ["CreateFunctionCommand"]
+          java: ["createFunction", "CreateFunctionRequest"]
+          python: ["create_function"]
+          go: ["CreateFunction"]
+          rust: ["create_function"]
+      UpdateFunctionCode:
+        iam_action: "lambda:UpdateFunctionCode"
+        sdk_patterns:
+          typescript: ["UpdateFunctionCodeCommand"]
+          java: ["updateFunctionCode", "UpdateFunctionCodeRequest"]
+          python: ["update_function_code"]
+          go: ["UpdateFunctionCode"]
+          rust: ["update_function_code"]
+
+  cloudwatch:
+    iam_prefix: "cloudwatch"
+    resource_arn_pattern: "arn:aws:cloudwatch:${region}:${account}:*"
+    operations:
+      PutMetricData:
+        iam_action: "cloudwatch:PutMetricData"
+        sdk_patterns:
+          typescript: ["PutMetricDataCommand"]
+          java: ["putMetricData", "PutMetricDataRequest"]
+          python: ["put_metric_data"]
+          go: ["PutMetricData"]
+          rust: ["put_metric_data"]
+      GetMetricData:
+        iam_action: "cloudwatch:GetMetricData"
+        sdk_patterns:
+          typescript: ["GetMetricDataCommand"]
+          java: ["getMetricData", "GetMetricDataRequest"]
+          python: ["get_metric_data"]
+          go: ["GetMetricData"]
+          rust: ["get_metric_data"]
+      DescribeAlarms:
+        iam_action: "cloudwatch:DescribeAlarms"
+        sdk_patterns:
+          typescript: ["DescribeAlarmsCommand"]
+          java: ["describeAlarms", "DescribeAlarmsRequest"]
+          python: ["describe_alarms"]
+          go: ["DescribeAlarms"]
+          rust: ["describe_alarms"]
+      PutMetricAlarm:
+        iam_action: "cloudwatch:PutMetricAlarm"
+        sdk_patterns:
+          typescript: ["PutMetricAlarmCommand"]
+          java: ["putMetricAlarm", "PutMetricAlarmRequest"]
+          python: ["put_metric_alarm"]
+          go: ["PutMetricAlarm"]
+          rust: ["put_metric_alarm"]
+
+  cloudwatch-logs:
+    iam_prefix: "logs"
+    resource_arn_pattern: "arn:aws:logs:${region}:${account}:log-group:${log-group}:*"
+    operations:
+      CreateLogGroup:
+        iam_action: "logs:CreateLogGroup"
+        sdk_patterns:
+          typescript: ["CreateLogGroupCommand"]
+          java: ["createLogGroup", "CreateLogGroupRequest"]
+          python: ["create_log_group"]
+          go: ["CreateLogGroup"]
+          rust: ["create_log_group"]
+      CreateLogStream:
+        iam_action: "logs:CreateLogStream"
+        sdk_patterns:
+          typescript: ["CreateLogStreamCommand"]
+          java: ["createLogStream", "CreateLogStreamRequest"]
+          python: ["create_log_stream"]
+          go: ["CreateLogStream"]
+          rust: ["create_log_stream"]
+      PutLogEvents:
+        iam_action: "logs:PutLogEvents"
+        sdk_patterns:
+          typescript: ["PutLogEventsCommand"]
+          java: ["putLogEvents", "PutLogEventsRequest"]
+          python: ["put_log_events"]
+          go: ["PutLogEvents"]
+          rust: ["put_log_events"]
+      GetLogEvents:
+        iam_action: "logs:GetLogEvents"
+        sdk_patterns:
+          typescript: ["GetLogEventsCommand"]
+          java: ["getLogEvents", "GetLogEventsRequest"]
+          python: ["get_log_events"]
+          go: ["GetLogEvents"]
+          rust: ["get_log_events"]
+      DescribeLogGroups:
+        iam_action: "logs:DescribeLogGroups"
+        resource_arn_pattern: "arn:aws:logs:${region}:${account}:log-group:*"
+        sdk_patterns:
+          typescript: ["DescribeLogGroupsCommand"]
+          java: ["describeLogGroups", "DescribeLogGroupsRequest"]
+          python: ["describe_log_groups"]
+          go: ["DescribeLogGroups"]
+          rust: ["describe_log_groups"]
+      FilterLogEvents:
+        iam_action: "logs:FilterLogEvents"
+        sdk_patterns:
+          typescript: ["FilterLogEventsCommand"]
+          java: ["filterLogEvents", "FilterLogEventsRequest"]
+          python: ["filter_log_events"]
+          go: ["FilterLogEvents"]
+          rust: ["filter_log_events"]
+
+  sts:
+    iam_prefix: "sts"
+    resource_arn_pattern: "arn:aws:sts::${account}:*"
+    operations:
+      AssumeRole:
+        iam_action: "sts:AssumeRole"
+        resource_arn_pattern: "arn:aws:iam::${account}:role/${resource-name}"
+        sdk_patterns:
+          typescript: ["AssumeRoleCommand"]
+          java: ["assumeRole", "AssumeRoleRequest"]
+          python: ["assume_role"]
+          go: ["AssumeRole"]
+          rust: ["assume_role"]
+      GetCallerIdentity:
+        iam_action: "sts:GetCallerIdentity"
+        sdk_patterns:
+          typescript: ["GetCallerIdentityCommand"]
+          java: ["getCallerIdentity", "GetCallerIdentityRequest"]
+          python: ["get_caller_identity"]
+          go: ["GetCallerIdentity"]
+          rust: ["get_caller_identity"]
+      AssumeRoleWithWebIdentity:
+        iam_action: "sts:AssumeRoleWithWebIdentity"
+        resource_arn_pattern: "arn:aws:iam::${account}:role/${resource-name}"
+        sdk_patterns:
+          typescript: ["AssumeRoleWithWebIdentityCommand"]
+          java: ["assumeRoleWithWebIdentity", "AssumeRoleWithWebIdentityRequest"]
+          python: ["assume_role_with_web_identity"]
+          go: ["AssumeRoleWithWebIdentity"]
+          rust: ["assume_role_with_web_identity"]
+
+  ssm:
+    iam_prefix: "ssm"
+    resource_arn_pattern: "arn:aws:ssm:${region}:${account}:parameter/${parameter-path}"
+    operations:
+      GetParameter:
+        iam_action: "ssm:GetParameter"
+        sdk_patterns:
+          typescript: ["GetParameterCommand"]
+          java: ["getParameter", "GetParameterRequest"]
+          python: ["get_parameter"]
+          go: ["GetParameter"]
+          rust: ["get_parameter"]
+      GetParameters:
+        iam_action: "ssm:GetParameters"
+        sdk_patterns:
+          typescript: ["GetParametersCommand"]
+          java: ["getParameters", "GetParametersRequest"]
+          python: ["get_parameters"]
+          go: ["GetParameters"]
+          rust: ["get_parameters"]
+      GetParametersByPath:
+        iam_action: "ssm:GetParametersByPath"
+        sdk_patterns:
+          typescript: ["GetParametersByPathCommand"]
+          java: ["getParametersByPath", "GetParametersByPathRequest"]
+          python: ["get_parameters_by_path"]
+          go: ["GetParametersByPath"]
+          rust: ["get_parameters_by_path"]
+      PutParameter:
+        iam_action: "ssm:PutParameter"
+        sdk_patterns:
+          typescript: ["PutParameterCommand"]
+          java: ["putParameter", "PutParameterRequest"]
+          python: ["put_parameter"]
+          go: ["PutParameter"]
+          rust: ["put_parameter"]
+      DeleteParameter:
+        iam_action: "ssm:DeleteParameter"
+        sdk_patterns:
+          typescript: ["DeleteParameterCommand"]
+          java: ["deleteParameter", "DeleteParameterRequest"]
+          python: ["delete_parameter"]
+          go: ["DeleteParameter"]
+          rust: ["delete_parameter"]
+
+  secretsmanager:
+    iam_prefix: "secretsmanager"
+    resource_arn_pattern: "arn:aws:secretsmanager:${region}:${account}:secret:${secret-id}"
+    operations:
+      GetSecretValue:
+        iam_action: "secretsmanager:GetSecretValue"
+        sdk_patterns:
+          typescript: ["GetSecretValueCommand"]
+          java: ["getSecretValue", "GetSecretValueRequest"]
+          python: ["get_secret_value"]
+          go: ["GetSecretValue"]
+          rust: ["get_secret_value"]
+      CreateSecret:
+        iam_action: "secretsmanager:CreateSecret"
+        sdk_patterns:
+          typescript: ["CreateSecretCommand"]
+          java: ["createSecret", "CreateSecretRequest"]
+          python: ["create_secret"]
+          go: ["CreateSecret"]
+          rust: ["create_secret"]
+      UpdateSecret:
+        iam_action: "secretsmanager:UpdateSecret"
+        sdk_patterns:
+          typescript: ["UpdateSecretCommand"]
+          java: ["updateSecret", "UpdateSecretRequest"]
+          python: ["update_secret"]
+          go: ["UpdateSecret"]
+          rust: ["update_secret"]
+      DescribeSecret:
+        iam_action: "secretsmanager:DescribeSecret"
+        sdk_patterns:
+          typescript: ["DescribeSecretCommand"]
+          java: ["describeSecret", "DescribeSecretRequest"]
+          python: ["describe_secret"]
+          go: ["DescribeSecret"]
+          rust: ["describe_secret"]
+      ListSecrets:
+        iam_action: "secretsmanager:ListSecrets"
+        resource_arn_pattern: "arn:aws:secretsmanager:${region}:${account}:secret:*"
+        sdk_patterns:
+          typescript: ["ListSecretsCommand"]
+          java: ["listSecrets", "ListSecretsRequest"]
+          python: ["list_secrets"]
+          go: ["ListSecrets"]
+          rust: ["list_secrets"]
+
+  ses:
+    iam_prefix: "ses"
+    resource_arn_pattern: "arn:aws:ses:${region}:${account}:identity/${resource-name}"
+    operations:
+      SendEmail:
+        iam_action: "ses:SendEmail"
+        sdk_patterns:
+          typescript: ["SendEmailCommand"]
+          java: ["sendEmail", "SendEmailRequest"]
+          python: ["send_email"]
+          go: ["SendEmail"]
+          rust: ["send_email"]
+      SendRawEmail:
+        iam_action: "ses:SendRawEmail"
+        sdk_patterns:
+          typescript: ["SendRawEmailCommand"]
+          java: ["sendRawEmail", "SendRawEmailRequest"]
+          python: ["send_raw_email"]
+          go: ["SendRawEmail"]
+          rust: ["send_raw_email"]
+      SendTemplatedEmail:
+        iam_action: "ses:SendTemplatedEmail"
+        sdk_patterns:
+          typescript: ["SendTemplatedEmailCommand"]
+          java: ["sendTemplatedEmail", "SendTemplatedEmailRequest"]
+          python: ["send_templated_email"]
+          go: ["SendTemplatedEmail"]
+          rust: ["send_templated_email"]
+      SendBulkTemplatedEmail:
+        iam_action: "ses:SendBulkTemplatedEmail"
+        sdk_patterns:
+          typescript: ["SendBulkTemplatedEmailCommand"]
+          java: ["sendBulkTemplatedEmail", "SendBulkTemplatedEmailRequest"]
+          python: ["send_bulk_templated_email"]
+          go: ["SendBulkTemplatedEmail"]
+          rust: ["send_bulk_templated_email"]
+
+  cognito-idp:
+    iam_prefix: "cognito-idp"
+    resource_arn_pattern: "arn:aws:cognito-idp:${region}:${account}:userpool/${user-pool-id}"
+    operations:
+      AdminGetUser:
+        iam_action: "cognito-idp:AdminGetUser"
+        sdk_patterns:
+          typescript: ["AdminGetUserCommand"]
+          java: ["adminGetUser", "AdminGetUserRequest"]
+          python: ["admin_get_user"]
+          go: ["AdminGetUser"]
+          rust: ["admin_get_user"]
+      AdminCreateUser:
+        iam_action: "cognito-idp:AdminCreateUser"
+        sdk_patterns:
+          typescript: ["AdminCreateUserCommand"]
+          java: ["adminCreateUser", "AdminCreateUserRequest"]
+          python: ["admin_create_user"]
+          go: ["AdminCreateUser"]
+          rust: ["admin_create_user"]
+      InitiateAuth:
+        iam_action: "cognito-idp:InitiateAuth"
+        sdk_patterns:
+          typescript: ["InitiateAuthCommand"]
+          java: ["initiateAuth", "InitiateAuthRequest"]
+          python: ["initiate_auth"]
+          go: ["InitiateAuth"]
+          rust: ["initiate_auth"]
+      RespondToAuthChallenge:
+        iam_action: "cognito-idp:RespondToAuthChallenge"
+        sdk_patterns:
+          typescript: ["RespondToAuthChallengeCommand"]
+          java: ["respondToAuthChallenge", "RespondToAuthChallengeRequest"]
+          python: ["respond_to_auth_challenge"]
+          go: ["RespondToAuthChallenge"]
+          rust: ["respond_to_auth_challenge"]
+      ListUsers:
+        iam_action: "cognito-idp:ListUsers"
+        sdk_patterns:
+          typescript: ["ListUsersCommand"]
+          java: ["listUsers", "ListUsersRequest"]
+          python: ["list_users"]
+          go: ["ListUsers"]
+          rust: ["list_users"]
+      SignUp:
+        iam_action: "cognito-idp:SignUp"
+        sdk_patterns:
+          typescript: ["SignUpCommand"]
+          java: ["signUp", "SignUpRequest"]
+          python: ["sign_up"]
+          go: ["SignUp"]
+          rust: ["sign_up"]
+      ConfirmSignUp:
+        iam_action: "cognito-idp:ConfirmSignUp"
+        sdk_patterns:
+          typescript: ["ConfirmSignUpCommand"]
+          java: ["confirmSignUp", "ConfirmSignUpRequest"]
+          python: ["confirm_sign_up"]
+          go: ["ConfirmSignUp"]
+          rust: ["confirm_sign_up"]

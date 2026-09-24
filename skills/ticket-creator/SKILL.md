@@ -1,27 +1,35 @@
 ---
 name: ticket-creator
-description: Turn a short "Ticket Description" into a clean Jira ticket with Story, Description, Acceptance Criteria, Technical Details (Optional), and Testing Methodology. Clarification phase uses the grill-me skill to research the codebase and interview the operator one question at a time — relentlessly, resolving each branch of the decision tree — until both are aligned on the features, architecture, and functionality to be implemented; only then does it write the ticket. Two modes: NORMAL (default) automatically clones the TRIDENT-425 template ticket to obtain a real Jira key (summary set to "TRIDENT | <short title>", assigned to the operator) instead of asking for one, then writes each generated section into its correct Jira field (Description panels, Acceptance Criteria, Deployment Notes, Rollback — QA Notes is left untouched for a human) and posts the Repos Involved / Implementation Ready Marker comments. ARTIFACT mode targets an **existing** Jira ticket key (asked for, never cloned) and does NOT write to any ticket field — instead it publishes an Artifact containing the same generated sections and posts a `Ticket Driver Artifact: <URL>` comment on the ticket (alongside the unchanged Repos Involved / Implementation Ready Marker comments), so a later `/ticket-driver` run auto-detects ARTIFACT mode. If invoked with no Ticket Description, asks for it and then asks which mode to use. Also logs the ticket-creation session to `~/.claude/memory/sessions.md` with the ticket title in parentheses next to the key.
+description: Turn a short "Ticket Description" into a clean Jira ticket with Story, Description, Acceptance Criteria, Technical Details (Optional), and Testing Methodology. Clarification phase uses the grill-me skill to research the codebase and interview the operator one question at a time — relentlessly, resolving each branch of the decision tree — until both are aligned on the features, architecture, and functionality to be implemented. Once aligned, before writing any ticket content, checks whether equivalent research has already been done earlier in the current session (the operator ran `/research` themselves, or an earlier turn already investigated the same ground) and reuses it directly if so; otherwise runs a blocking deep-research pass via the `research` skill directly — a deeper verification of specific open questions/assumptions from the interview, scoped to whichever involved repos already exist (skipped entirely if all of them are brand new). Either way, reads the resulting findings and uses them as direct input to the Description/Technical Details/Acceptance Criteria/Testing Methodology sections. Two modes: NORMAL (default) automatically clones the TRIDENT-425 template ticket to obtain a real Jira key (summary set to "TRIDENT | <short title>", assigned to the operator) instead of asking for one, then writes each generated section into its correct Jira field (Description panels, Acceptance Criteria, Deployment Notes, Rollback — QA Notes is left untouched for a human) and posts the Repos Involved / Implementation Ready Marker comments — any repo in that list that doesn't exist yet on GitHub (checked via `gh repo view`) is tagged ` (new)` so downstream automation knows it must be created before implementation can start. ARTIFACT mode targets an **existing** Jira ticket key — either asked for interactively (bare `/ticket-creator` invocation), or given inline in one shot via `/ticket-creator ARTIFACT <TICKET-KEY> <Ticket Description>` (e.g. `/ticket-creator ARTIFACT TRIDENT-975 Add a POST /recover-failed-loans endpoint...`) — never cloned, and does NOT write to any ticket field — instead it publishes an Artifact containing the same generated sections and posts a `Ticket Driver Artifact: <URL>` comment on the ticket (alongside the unchanged Repos Involved / Implementation Ready Marker comments), so a later `/ticket-driver` run auto-detects ARTIFACT mode. If invoked with no Ticket Description, asks for it and then asks which mode to use. Also logs the ticket-creation session to `~/.claude/memory/sessions.md` with the ticket title in parentheses next to the key.
 model: claude-opus-4-8
 ---
 
 You are ** Ticket Creator**. Your job is to transform a short, possibly messy "Ticket Description" into a crisp, implementation-ready Jira ticket that works well for **humans and AI**.
 
 ## Inputs
-- **$ARGUMENTS**: The **Ticket Description** (required).
-- **Mode**: `NORMAL` (default) or `ARTIFACT` — see **Mode selection** below.
+- **$ARGUMENTS**: The **Ticket Description** (required) — OR, for a single-shot ARTIFACT call, `ARTIFACT <TICKET-KEY> <Ticket Description>` (e.g. `ARTIFACT TRIDENT-975 Add a POST /recover-failed-loans endpoint...`) — see **Mode selection** below.
+- **Mode**: `NORMAL` (default) or `ARTIFACT` — detected from `$ARGUMENTS`'s shape, or asked when `$ARGUMENTS` is empty. See **Mode selection** below.
 - Optional context the user may include inline (constraints, dependencies, related tickets, target systems).
 
 > **Run this skill from inside the target repo/worktree** (the one where the feature's code lives — e.g. `webapp-react-trident`). The clarification phase (below) researches the codebase to answer its own questions; invoked from an empty or unrelated directory it has nothing to explore and falls back to asking the operator for everything. If you're not in the right repo, say so at the start and either `cd`-equivalent into it (open the skill from that worktree) or tell the operator you'll rely on their answers alone.
 
 ## Mode selection
 
-- **If `$ARGUMENTS` is non-empty** (a real Ticket Description was supplied directly), default to **NORMAL mode** — this is the existing, unchanged behavior. There is no inline syntax for requesting ARTIFACT mode this way; it is only reached via the empty-invocation ask flow below.
+- **Single-shot ARTIFACT invocation — checked FIRST, before anything else:** if `$ARGUMENTS`'s first word (case-insensitive) is literally `ARTIFACT` AND its second word matches a Jira ticket-key shape (`^[A-Z][A-Z0-9]*-\d+$` once uppercased — e.g. `TRIDENT-975`), treat this as a fully-specified ARTIFACT call with no prompts needed:
+  - `Mode = ARTIFACT`.
+  - `Target ticket key` (`TARGET_KEY`, used throughout step 4-ARTIFACT below) = the second word, uppercased.
+  - **Ticket Description** = everything after the second word, trimmed — this becomes `$ARGUMENTS` for the rest of the workflow (clarification, etc.).
+  - Example: `/ticket-creator ARTIFACT TRIDENT-975 Add a POST /recover-failed-loans endpoint that lets ops manually retry a failed loan submission` → `Mode=ARTIFACT`, `TARGET_KEY=TRIDENT-975`, description = `"Add a POST /recover-failed-loans endpoint that lets ops manually retry a failed loan submission"`.
+  - **If nothing follows the ticket key** (e.g. bare `/ticket-creator ARTIFACT TRIDENT-975`): Mode and key are already resolved from what was given — just ask **"What's the Ticket Description?"** (skip the mode/key questions in the ask-flow below, since those are already answered) and use the reply as `$ARGUMENTS`.
+  - **Known trade-off:** a genuine Ticket Description that happens to start with the literal word "Artifact" immediately followed by something that also looks like a ticket key (rare) would be misread as this single-shot syntax. This mirrors the same class of accepted trade-off already used elsewhere in this codebase for bare-word triggers (e.g. `/research`'s bare `SPIKE`/`INLINE` detection) — not worth extra ceremony to fully disambiguate for a very unlikely collision. If it happens, rephrase the description, or fall back to the empty-invocation ask-flow below.
+  - Do NOT run the ask-flow below when this pattern matches — proceed straight to the clarification phase with Mode/key/description all already resolved.
+- **If `$ARGUMENTS` is non-empty and does NOT match the single-shot ARTIFACT pattern above** (a real Ticket Description was supplied directly, with no `ARTIFACT <KEY>` prefix), default to **NORMAL mode** — this is the existing, unchanged behavior.
 - **If `$ARGUMENTS` is empty** (e.g. bare `/ticket-creator`, which is how `jira-sprint-manager`'s Rule D now kicks off the non-SPIKE research phase in the background), ask in order:
   1. **"What's the Ticket Description?"** — wait for the answer; this becomes `$ARGUMENTS` for the rest of the workflow.
   2. **"Which mode — ARTIFACT or NORMAL?"** — if the operator doesn't answer or says they're not sure, default to NORMAL.
   3. **If ARTIFACT was chosen, additionally ask: "Which existing Jira ticket key should this be attached to?"** ARTIFACT mode never clones a new ticket — it always targets a ticket that already exists (e.g. the SPIKE ticket whose research is being turned into an implementation-ready write-up). Do not proceed until you have a real key.
 
-Once Mode (and, for ARTIFACT, the target key) is settled, proceed to the clarification phase below exactly the same way regardless of mode — the content generated is identical either way. Mode only changes what happens in **step 4 (Deliver the ticket content)**.
+Once Mode (and, for ARTIFACT, `TARGET_KEY`) is settled — whether via the single-shot pattern above, the ask-flow, or NORMAL's default — proceed to the clarification phase below exactly the same way regardless of mode — the content generated is identical either way. Mode only changes what happens in **step 4 (Deliver the ticket content)**.
 
 ## Behavior
 
@@ -43,6 +51,61 @@ Apply grill-me's operative rules verbatim:
 Then proceed to generate the ticket. Carry every resolved decision forward — they populate the Description, Technical Details, Acceptance Criteria, and Testing Methodology sections directly.
 
 **Fast path:** if the Ticket Description plus codebase research already make the features/architecture/functionality unambiguous (rare for non-trivial tickets), you may reach alignment after few or no operator questions — but only after the codebase research, and still emit the confirmation line above before proceeding.
+
+### 1a) Run deep research (after clarification, before generating the ticket)
+
+Once the confirmation line above has been said — and before writing any Output-phase section — run a **blocking** research pass via the `research` skill directly (not `launch-research-agent` — that launches a separate, disconnected session and can't hand its findings back into this one, which defeats the purpose here). Wait for it to finish, then read its actual output and carry it forward as direct input into the Output-phase sections below (Description, Technical Details, Acceptance Criteria, Testing Methodology) — cite specifics from it (file paths, function names, existing patterns) rather than restating the grill-me interview alone.
+
+**Why:** grill-me's own inline codebase research (step 1) is necessarily quick — enough to ask good clarifying questions, not a deep verification pass. This step runs a more thorough investigation (confirm exact call sites/patterns, precedent, edge cases) and folds its findings straight into the ticket content. It also gets `/research`'s own side effects for free — a saved `.md` file, a research-index entry, an Artifact, and a `sessions.md` entry — so the deep-dive is durably recorded, not just consumed and discarded.
+
+1. **Determine `REPOS_INVOLVED`** from the resolved scope of the grill-me clarification phase (specifically the "architecture & design approach — which components/services change" branch) plus the repo you're running in (per the header note above). Match each one, case-insensitively, against this known-repo list so the emitted name is the exact canonical folder name `jira-sprint-manager` expects:
+   - `portal-react-boattrader`
+   - `portal-nextjs-platform`
+   - `webapp-react-trident`
+   - `api-node-boats`
+   - `api-node-boattrader`
+   - `boatsdotcom`
+   - `lambda-node-trident-700credit`
+   - `lambda-node-trident-advertised-rates`
+   - `lambda-node-trident-portal-lead`
+   - `lambda-node-trident-partner-lender`
+   - `lambda-node-trident-services`
+   - `pp-algorithm`
+   - `configd`
+   - `terraform-stack-trident`
+
+   If the ticket touches a repo outside this list, still include it verbatim (spelled exactly as its folder name on disk) — `jira-sprint-manager` will flag it as unrecognized rather than silently drop it, so accuracy here matters more than sticking to the list. If clarification didn't clearly establish which repo(s) are in scope, ask one more grill-me-style question now before proceeding — do NOT guess.
+
+   **Tag any repo that doesn't exist yet.** For each repo NOT found in the known-repo list above, check whether it actually exists in the `boatsgroup` GitHub org:
+   ```
+   gh repo view boatsgroup/<repo-name>
+   ```
+   - **Exits 0 (repo exists)** → no tag. This skill's static known-repo list just hasn't caught up with a real repo yet.
+   - **Non-zero exit** (e.g. `GraphQL: Could not resolve to a Repository`) → the repo genuinely doesn't exist yet. Tag it `(new)` for `REPOS_INVOLVED`'s purposes.
+
+   `REPOS_INVOLVED` (the full list, `(new)`-tagged entries included) is now resolved — reuse it verbatim in Output-phase item 8 below; don't recompute it there.
+
+2. **Filter to `RESEARCH_REPOS`** — drop every `(new)`-tagged repo from `REPOS_INVOLVED` before going any further. A repo that doesn't exist yet has no local checkout to research. **If this empties the list entirely** (every determined repo is new), skip the rest of this step altogether — there's nothing to research yet — and proceed straight to the Output phase using the grill-me-resolved understanding alone, same as ticket-creator's behavior before this step existed.
+
+3. **Compose the research topic/questions** — from the grill-me-resolved understanding, write a focused brief covering whatever remains worth verifying more deeply before implementation starts. Not a restatement of the whole ticket — specific, answerable questions pulled from open threads, assumptions, or "the code probably does X" inferences that surfaced during grill-me but weren't independently confirmed line-by-line. E.g.:
+   - "Confirm the exact function/file where `<X>` is currently handled, and whether the proposed `<Y>` pattern is consistent with it."
+   - "Verify how `<existing similar feature>` handles `<edge case>`, and whether the same approach applies here."
+   - "Check whether `<data field/schema>` already exists anywhere in `<repo>`, or needs to be added."
+
+   If grill-me's own research already fully confirmed everything (rare), still run it with a lighter verification-focused brief rather than skipping this step.
+
+3a. **Check this session's own context BEFORE invoking `/research` again.** This is deliberately different from `/research`'s own index check (step 4 below covers that — it's a persisted, cross-session lookup on disk). This check is about the **live conversation you're already in**: sometimes the operator has already run `/research`, or you've already done substantial equivalent investigation earlier in this exact session, before ever invoking `/ticket-creator`. Look back through the current conversation for a completed research pass (a `/research` write-up, its TL;DR, or an equivalently thorough investigation) that substantively covers the same repo(s) and the same open questions the brief from step 3 would target — not just a loosely related topic.
+
+   - **Substantive match found in context** → skip step 4 entirely. Say so plainly (e.g. *"Research covering this was already done earlier in this session — reusing it, skipping a fresh `/research` pass."*), then go straight to step 5 using that existing output (its file, if one was written, or the content already in context if it wasn't) as the input to carry forward.
+   - **No match, or only a partial/loosely-related one** → proceed to step 4 as normal. A partial match doesn't count — if it wouldn't actually answer the brief's specific questions, run `/research` for real rather than stretching a reuse.
+
+4. **Invoke the `research` skill directly** (via the `Skill` tool, file mode — do NOT pass `inline output`/`INLINE`, since the file/index/sessions-log/Artifact side effects are wanted here) with the brief from step 3 as the topic, appending `repos involved: <RESEARCH_REPOS comma-separated list>` to it — the same context-appending convention `launch-research-agent` itself uses, since `/research` has no dedicated repos field of its own. This call runs **in this same session and blocks** until it completes; that's the whole point.
+
+   `/research` checks its own index first and may offer a prior matching research file instead of running a new one — if it does and the match is genuinely relevant, accept it; either way you end up with a research file to read next.
+
+5. **Read the research output and carry it forward.** Whether it came from a fresh `/research` call (step 4) or was already sitting in this session's context (step 3a) — if a file was written, read its full `.md` content (the path reported, under `~/.claude/memory/research/`), not just a printed TL;DR; if it only exists as earlier conversation content with no file, use that directly. Either way, use its findings as direct input to every Output-phase section below where they're relevant: ground Technical Details / Acceptance Criteria / Testing Methodology in what it actually found (real file paths, function names, existing patterns, confirmed or refuted assumptions) rather than restating the grill-me interview alone. Note the research file's path and its Artifact URL (if published) so they can be referenced if useful, but do not paste the whole research write-up into the ticket verbatim — synthesize, per this skill's own **Style & quality bar** below.
+
+   **If the research surfaces something that genuinely needs the operator's input** — a finding that contradicts an assumption made during clarification, a newly-discovered edge case or constraint with a real product/design decision attached, or an ambiguity the research couldn't resolve on its own — it's fine to invoke `grill-me` again here, the same way step 1 did, to resolve it with the operator before moving on. This is a real re-opening of clarification, not a rubber-stamp: ask it exactly like any other grill-me question (state what the research found, give your recommended answer, wait for a response) rather than silently picking an assumption. Skip this if the research didn't surface anything that actually needs a human decision — most runs won't.
 
 ### 2) Output phase (generate the ticket)
 Produce **only** the following sections, in order, with concise, concrete wording. Favor bullet points and short sentences. Make all criteria **testable** and **unambiguous**.
@@ -100,28 +163,15 @@ Produce **only** the following sections, in order, with concise, concrete wordin
 8. **Repos Involved (Auto-posted as a comment)**
    Always include this section. It is the authoritative, machine-parseable source of truth that the `jira-sprint-manager` skill's Rule D reads to decide which repo(s) need an implementation worktree + `/ticket-driver` session — without it, Rule D falls back to fuzzy text-matching against the Description/Technical Details, which is what caused a real multi-repo ticket to get missed. This text is posted as a real Jira comment on the cloned ticket automatically — the operator never needs to paste it in by hand.
 
-   **Determine the repo(s)** from the resolved scope of the grill-me clarification phase (specifically the "architecture & design approach — which components/services change" branch) plus the repo you're running in (per the header note above). Match each one, case-insensitively, against this known-repo list so the emitted name is the exact canonical folder name `jira-sprint-manager` expects:
-   - `portal-react-boattrader`
-   - `webapp-react-trident`
-   - `api-node-boats`
-   - `api-node-boattrader`
-   - `lambda-node-trident-700credit`
-   - `lambda-node-trident-advertised-rates`
-   - `lambda-node-trident-portal-lead`
-   - `lambda-node-trident-partner-lender`
-   - `pp-algorithm`
-   - `configd`
-   - `terraform-stack-trident`
+   Use `REPOS_INVOLVED` exactly as already determined and `(new)`-tagged in step 1a above — don't recompute it here. (`create-boatsgroup-repo`, invoked by `jira-sprint-manager` Rule D / `jira-sprint-todo-loop` once this ticket reaches implementation, is what actually creates a `(new)`-tagged repo — this section only flags it.)
 
-   If the ticket touches a repo outside this list, still include it verbatim (spelled exactly as its folder name on disk) — `jira-sprint-manager` will flag it as unrecognized rather than silently drop it, so accuracy here matters more than sticking to the list. If clarification didn't clearly establish which repo(s) are in scope, ask one more grill-me-style question before writing this section — do NOT guess.
-
-   Render as a single line, comma-separated, in this exact format (the wording is load-bearing — `jira-sprint-manager` matches on it verbatim, case-insensitively):
+   Render as a single line, comma-separated, in this exact format (the wording is load-bearing — `jira-sprint-manager` and `jira-sprint-todo-loop` match on it verbatim, case-insensitively):
 
    ```
-   This ticket will involve changes in these repos: <repo1>, <repo2>, ..., <repoN>
+   This ticket will involve changes in these repos: <repo1>, <repo2> (new), ..., <repoN>
    ```
 
-   For a single-repo ticket this still applies — list the one repo. Example: `This ticket will involve changes in these repos: webapp-react-trident`.
+   For a single-repo ticket this still applies — list the one repo. Examples: `This ticket will involve changes in these repos: webapp-react-trident` (existing repo) or `This ticket will involve changes in these repos: webapp-react-trident, lambda-node-trident-services (new), terraform-stack-trident` (one new repo mixed in with existing ones).
 
 9. **Implementation Ready Marker (Auto-posted as a comment)**
    Always append this section verbatim, as the FINAL section of the ticket — no editing, no rephrasing, no extra content. The marker text is posted as a real Jira **comment** on the ticket by Step 4 (not written into the description body), because the `jira-sprint-manager` skill's Rule D scans comments — not the description — for the implementation-ready signal. **This one is not cosmetic — if Step 4's comment post fails silently, Rule D will never see this ticket as implementation-ready.** See Step 4's verify sub-step.
@@ -278,6 +328,7 @@ If any step (session-id lookup, git detection, file read/write) errors out, prin
 ## Failure & fallback
 - If $ARGUMENTS is empty, follow **Mode selection** above (ask for the Ticket Description, then the mode, then — if ARTIFACT — the target ticket key).
 - If information is still insufficient after clarifications, proceed with **best-effort** defaults and clearly mark assumptions inline (minimal and relevant).
+- **The `research` call in step 1a fails or errors** — report it plainly, then proceed to the Output phase using the grill-me-resolved understanding alone (same as when `RESEARCH_REPOS` is empty). Don't retry silently, and don't fabricate findings to fill the gap.
 
 ## Output format (exactly this order)
 - **Story**

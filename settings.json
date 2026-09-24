@@ -62,11 +62,16 @@
       "mcp__atlassian__fetch",
       "mcp__context7__*",
       "mcp__sequential-thinking__*",
-      "mcp__claude_ai_Slack__slack_send_message"
+      "mcp__claude_ai_Slack__*",
+      "mcp__claude_ai_Gmail__search_threads",
+      "mcp__claude_ai_Gmail__get_thread",
+      "mcp__claude_ai_Gmail__get_message",
+      "mcp__claude_ai_Gmail__list_drafts",
+      "mcp__claude_ai_Gmail__list_labels",
+      "mcp__atlassian__transitionJiraIssue"
     ],
     "defaultMode": "auto"
   },
-  "model": "sonnet",
   "hooks": {
     "PreToolUse": [
       {
@@ -137,18 +142,23 @@
   "enabledPlugins": {
     "typescript-lsp@claude-plugins-official": true
   },
+  "outputStyle": "Concise",
   "alwaysThinkingEnabled": true,
   "voice": {
     "enabled": true,
     "mode": "hold"
   },
+  "theme": "dark",
   "agentPushNotifEnabled": true,
   "skipAutoPermissionPrompt": true,
   "autoMode": {
     "allow": [
       "$defaults",
-      "Posting a loan-recovery status note to the #finance-prod-alerts Slack channel via mcp__claude_ai_Slack__slack_send_message (the ✅ resolution reply, or the ⚠️ needs-manual-recovery / auto-recovery-halted note emitted by the fix-prod-submission-error skill). This is operator-authorized team notification — it writes no data and is never destructive or security-sensitive. PII redaction remains the skill's own content rule."
+      "Posting a loan-recovery status note to the #finance-prod-alerts Slack channel via mcp__claude_ai_Slack__slack_send_message (the ✅ resolution reply, or the ⚠️ needs-manual-recovery / auto-recovery-halted note emitted by the fix-prod-submission-error skill). This is operator-authorized team notification — it writes no data and is never destructive or security-sensitive. PII redaction remains the skill's own content rule.",
+      "Posting an operator-question notification to the #fabi-jira-sprint-manager Slack channel (C0BMTSBK048) via mcp__claude_ai_Slack__slack_send_message, sent by the jira-sprint-manager skill immediately before it blocks on AskUserQuestion, so a looped/unattended run doesn't sit silently waiting for an answer nobody sees. This is operator-authorized self-notification to the operator's own private channel — it writes no data, contains only the queued question text, and is never destructive or security-sensitive.",
+      "Posting a run-results summary (launched/skipped ticket counts and keys, e.g. 'jira-sprint-todo-loop: 0 launched, 1 skipped') to the #fabi-jira-sprint-manager Slack channel (C0BMTSBK048) via mcp__claude_ai_Slack__slack_send_message, sent by the jira-sprint-todo-loop skill at the end of every run. This is operator-authorized status reporting to the operator's own private channel — it writes no data and is never destructive or security-sensitive."
     ]
   },
-  "voiceEnabled": true
+  "voiceEnabled": true,
+  "model": "claude-opus-4-8[1m]"
 }

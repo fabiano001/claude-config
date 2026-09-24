@@ -1,0 +1,253 @@
+{
+  "Rules": [
+    {
+      "RuleArn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener-rule/app/api-alb/abc123/def456/rule1",
+      "Priority": "1",
+      "Conditions": [
+        {
+          "Field": "host-header",
+          "Values": ["api.example.com", "www.api.example.com"],
+          "HostHeaderConfig": {
+            "Values": ["api.example.com", "www.api.example.com"]
+          }
+        },
+        {
+          "Field": "path-pattern",
+          "Values": ["/api/v1/*"],
+          "PathPatternConfig": {
+            "Values": ["/api/v1/*"]
+          }
+        }
+      ],
+      "Actions": [
+        {
+          "Type": "forward",
+          "TargetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/api-node-payments/abc123",
+          "Order": 1
+        }
+      ],
+      "IsDefault": false
+    },
+    {
+      "RuleArn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener-rule/app/api-alb/abc123/def456/rule2",
+      "Priority": "2",
+      "Conditions": [
+        {
+          "Field": "host-header",
+          "Values": ["old.example.com"],
+          "HostHeaderConfig": {
+            "Values": ["old.example.com"]
+          }
+        }
+      ],
+      "Actions": [
+        {
+          "Type": "redirect",
+          "RedirectConfig": {
+            "Protocol": "HTTPS",
+            "Port": "443",
+            "Host": "new.example.com",
+            "Path": "/#{path}",
+            "Query": "#{query}",
+            "StatusCode": "HTTP_301"
+          },
+          "Order": 1
+        }
+      ],
+      "IsDefault": false
+    },
+    {
+      "RuleArn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener-rule/app/api-alb/abc123/def456/rule3",
+      "Priority": "3",
+      "Conditions": [
+        {
+          "Field": "http-header",
+          "HttpHeaderConfig": {
+            "HttpHeaderName": "X-Custom-Header",
+            "Values": ["special-value", "another-value"]
+          }
+        },
+        {
+          "Field": "path-pattern",
+          "Values": ["/special"],
+          "PathPatternConfig": {
+            "Values": ["/special"]
+          }
+        }
+      ],
+      "Actions": [
+        {
+          "Type": "forward",
+          "TargetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/api-node-payments/abc123",
+          "Order": 1
+        }
+      ],
+      "IsDefault": false
+    },
+    {
+      "RuleArn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener-rule/app/api-alb/abc123/def456/rule4",
+      "Priority": "4",
+      "Conditions": [
+        {
+          "Field": "http-request-method",
+          "HttpRequestMethodConfig": {
+            "Values": ["POST", "PUT"]
+          }
+        },
+        {
+          "Field": "path-pattern",
+          "Values": ["/api/data"],
+          "PathPatternConfig": {
+            "Values": ["/api/data"]
+          }
+        }
+      ],
+      "Actions": [
+        {
+          "Type": "forward",
+          "TargetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/api-node-payments/abc123",
+          "Order": 1
+        }
+      ],
+      "IsDefault": false
+    },
+    {
+      "RuleArn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener-rule/app/api-alb/abc123/def456/rule5",
+      "Priority": "5",
+      "Conditions": [
+        {
+          "Field": "query-string",
+          "QueryStringConfig": {
+            "Values": [
+              {"Key": "action", "Value": "export"},
+              {"Key": "format", "Value": "csv"}
+            ]
+          }
+        }
+      ],
+      "Actions": [
+        {
+          "Type": "forward",
+          "TargetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/api-node-payments/abc123",
+          "Order": 1
+        }
+      ],
+      "IsDefault": false
+    },
+    {
+      "RuleArn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener-rule/app/api-alb/abc123/def456/rule6",
+      "Priority": "6",
+      "Conditions": [
+        {
+          "Field": "path-pattern",
+          "Values": ["/lambda-handler"],
+          "PathPatternConfig": {
+            "Values": ["/lambda-handler"]
+          }
+        }
+      ],
+      "Actions": [
+        {
+          "Type": "forward",
+          "TargetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/lambda-tg/xyz789",
+          "Order": 1
+        }
+      ],
+      "IsDefault": false
+    },
+    {
+      "RuleArn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener-rule/app/api-alb/abc123/def456/rule7",
+      "Priority": "7",
+      "Conditions": [
+        {
+          "Field": "path-pattern",
+          "Values": ["/healthcheck"],
+          "PathPatternConfig": {
+            "Values": ["/healthcheck"]
+          }
+        }
+      ],
+      "Actions": [
+        {
+          "Type": "fixed-response",
+          "FixedResponseConfig": {
+            "StatusCode": "200",
+            "ContentType": "text/plain",
+            "MessageBody": "OK"
+          },
+          "Order": 1
+        }
+      ],
+      "IsDefault": false
+    },
+    {
+      "RuleArn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener-rule/app/api-alb/abc123/def456/rule8",
+      "Priority": "8",
+      "Conditions": [
+        {
+          "Field": "path-pattern",
+          "Values": ["/complex/**/deep"],
+          "PathPatternConfig": {
+            "Values": ["/complex/**/deep"]
+          }
+        }
+      ],
+      "Actions": [
+        {
+          "Type": "forward",
+          "TargetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/api-node-payments/abc123",
+          "Order": 1
+        }
+      ],
+      "IsDefault": false
+    },
+    {
+      "RuleArn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener-rule/app/api-alb/abc123/def456/rule9",
+      "Priority": "9",
+      "Conditions": [
+        {
+          "Field": "path-pattern",
+          "Values": ["/weighted"],
+          "PathPatternConfig": {
+            "Values": ["/weighted"]
+          }
+        }
+      ],
+      "Actions": [
+        {
+          "Type": "forward",
+          "ForwardConfig": {
+            "TargetGroups": [
+              {
+                "TargetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/api-node-payments/abc123",
+                "Weight": 80
+              },
+              {
+                "TargetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/api-node-payments-canary/def456",
+                "Weight": 20
+              }
+            ],
+            "TargetGroupStickinessConfig": {
+              "Enabled": false
+            }
+          },
+          "Order": 1
+        }
+      ],
+      "IsDefault": false
+    },
+    {
+      "RuleArn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:listener-rule/app/api-alb/abc123/def456/default",
+      "Priority": "default",
+      "Conditions": [],
+      "Actions": [
+        {
+          "Type": "forward",
+          "TargetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/api-node-payments/abc123",
+          "Order": 1
+        }
+      ],
+      "IsDefault": true
+    }
+  ]
+}

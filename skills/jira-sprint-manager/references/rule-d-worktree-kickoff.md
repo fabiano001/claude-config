@@ -8,6 +8,8 @@ The response contains at least ONE ticket whose `fields.status.name == "In Progr
 
 ## Per-In-Progress-ticket handling (apply in board order — top of the IN PROGRESS lane first)
 
+0. **Universal flag gate (runs first, before the Rule A chain-check, for every In Progress ticket).** Check `fields.customfield_10091` (see SKILL.md Step 2 for the pinned field id and the 2026-05-20 incident — never use the short name `flagged`). If non-empty, this ticket is a complete no-op for Rule D this run: do not fetch comments, do not scan for markers, do not create a worktree, do not launch a session. Append exactly one `REMINDERS` entry: `"<TICKET-KEY> is flagged (impediment) — Rule D made no changes, actions, or transitions. Clear the flag or unblock the impediment before next run if it's now actionable."` Then move on to the next In Progress ticket. Note this can genuinely fire even on a ticket Rule A just transitioned this same run — Rule A's own candidate walk already excludes flagged tickets from being CHOSEN, so a ticket freshly kicked off by Rule A can't be flagged yet, but a ticket that was ALREADY In Progress from a prior run can be flagged manually at any time in Jira, independent of anything this skill does.
+
 1. **Chain with Rule A (additive default).** Rule D explicitly chains with Rule A on tickets that Rule A just moved into In Progress this run via its classic candidate walk — that ticket's `actionsTaken` already carries `"Moved to In Progress"` from Rule A, and Rule D will append its own outcome on top (typically the research-branch outcome, since a freshly-kicked-off ticket has no implementation-ready marker yet). **Two exceptions (both terminal skips), check both:**
    - If Rule A appended a `"Move failed: …"` entry for this ticket (the transition didn't actually land), the ticket is NOT really In Progress in Jira — Rule D MUST skip it. Detect by scanning `actionsTaken` for an entry starting with `"Move failed"`.
    - If Rule A marked this ticket `Rule-D-SKIP` (its Step 0 — the TODO-MODE priority check, see `rule-a-kickoff.md` — determined this ticket's implementation is already underway or done via `ticket-driver TODO-MODE`, and transitioned it for that reason), Rule D MUST also skip it — even though the transition DID land this time. There's no worktree to create and no session to launch; `actionsTaken` will show `"Moved to In Progress — TODO-MODE implementation already underway, no worktree/session needed"` for this ticket instead of the plain `"Moved to In Progress"`, which is the detectable signal.
@@ -27,31 +29,39 @@ The response contains at least ONE ticket whose `fields.status.name == "In Progr
 
    Set `MARKER_FOUND = true` if any comment matches, otherwise `MARKER_FOUND = false`. **Do NOT early-out** — step 6 branches on this flag to choose between the implementation worktree path (marker found) and the research worktree path (marker not found). Both branches need the repo + paths computed in steps 4–5.
 
-3.5. **Scan comment bodies for the repos-involved marker.** `/ticket-creator` always posts a comment of this exact shape as part of ticket generation (see its "Repos Involved (Add as a comment)" section):
+3.5. **Scan comment bodies for the repos-involved marker.** `/ticket-creator` always posts a comment of this exact shape as part of ticket generation (see its "Repos Involved (Auto-posted as a comment)" section):
 
    ```
    This ticket will involve changes in these repos: <repo1>, <repo2>, …
    ```
 
-   Match case-insensitively against the trimmed start of each comment body: `this ticket will involve changes in these repos:`. If **zero** comments match, `REPOS_FROM_COMMENT = []` (ticket predates this convention, or was created manually outside `/ticket-creator` — fall through to the legacy text-scan logic in step 4). If **one or more** match, take the **most recently created** matching comment (a later comment may supersede an earlier one if the ticket's scope was revised) and parse everything after the colon as a comma-separated list:
-   - Trim whitespace from each entry.
-   - Match each, case-insensitively, against the known-repo list from step 4 below.
-   - Entries that match (case-insensitively) are normalized to the list's canonical casing/hyphenation.
-   - Entries that do NOT match any known repo are dropped and recorded: append `"Repos-comment listed unrecognized repo '<name>' for <TICKET-KEY> — skipped"` to `actionsTaken`. Do not invent a disk path for an unrecognized name.
+   `/ticket-creator` tags any repo that doesn't exist yet and must be created from scratch with a trailing ` (new)` — e.g. `lambda-node-trident-loan-recovery (new)`.
 
-   The surviving, deduped, normalized list is `REPOS_FROM_COMMENT`. This can still end up empty (e.g., every entry was unrecognized) — treat that identically to "zero comments matched" for step 4's purposes.
+   Match case-insensitively against the trimmed start of each comment body: `this ticket will involve changes in these repos:`. If **zero** comments match, `REPOS_FROM_COMMENT = []` (ticket predates this convention, or was created manually outside `/ticket-creator` — fall through to the legacy text-scan logic in step 4). If **one or more** match, take the **most recently created** matching comment (a later comment may supersede an earlier one if the ticket's scope was revised) and parse everything after the colon as a comma-separated list. For each entry:
+   - Trim whitespace.
+   - Check for a trailing `(new)` marker (case-insensitive, tolerate the space before it). If present, strip it from the name and set `IS_NEW_REPO[<name>] = true`; otherwise `IS_NEW_REPO[<name>] = false`.
+   - Match the (now-stripped) name, case-insensitively, against the known-repo list from step 4 below, and normalize matches to the list's canonical casing/hyphenation.
+   - **Entries with `IS_NEW_REPO == true` are always kept, even when they don't match any known repo** — that's the expected case, since a brand-new repo was never added to this static list. Do NOT run the "unrecognized repo"/disk-check logic below on them.
+   - **Entries with `IS_NEW_REPO == false` that do NOT match any known repo — check disk before dropping.** The static known-repo list exists to canonicalize casing and drive the SEGMENT lookup (step 5.6) — it is NOT the authority on what's a real repo. New repos get created on disk long before anyone remembers to add them here, and a real, already-existing repo must never be silently excluded from implementation kickoff just because this list hasn't caught up. Run `test -d ~/BOATS-GROUP-PROJECTS-GITHUB/<name>` (standalone Bash, using the name exactly as given in the comment):
+     - **Directory exists** → keep the entry, using the name exactly as given (there's no canonical casing to normalize to since it isn't in the list). Append an informational note — not a skip — to `actionsTaken`: `"Repos-comment listed '<name>' for <TICKET-KEY> — not in the static known-repo list but exists on disk at ~/BOATS-GROUP-PROJECTS-GITHUB/<name>; proceeding with it. Add it to rule-d-worktree-kickoff.md's known-repo list (and its duplicates in jira-sprint-todo-loop, ticket-creator, launch-resume-session, rule-e, rule-f) to silence this note."` This entry then flows through the rest of Rule D exactly like a listed repo — worktree creation, SEGMENT lookup (falls into step 5.6's "anything else" bucket, using its own name verbatim).
+     - **Directory does NOT exist** → this is a genuine unrecognized name (typo, or a repo that doesn't exist anywhere) — drop it and record, same as before: append `"Repos-comment listed unrecognized repo '<name>' for <TICKET-KEY> — skipped (not in known-repo list and no matching directory on disk)"` to `actionsTaken`. Do not invent a disk path for it.
+
+   The surviving list is `REPOS_FROM_COMMENT`, each entry carrying its `IS_NEW_REPO` flag (canonicalized casing for a listed match; the as-given name for a disk-matched-but-unlisted entry). This can still end up empty (e.g., every entry was unrecognized, not tagged new, and none existed on disk) — treat that identically to "zero comments matched" for step 4's purposes.
 
 4. **Determine the target repo(s).** `REPOS_FROM_COMMENT` (step 3.5) is checked FIRST in both phases — it's the authoritative signal because `/ticket-creator` derived it from the actual clarification interview, not from fuzzy text-matching against prose. The legacy logic below is the fallback for tickets that predate the convention or were created outside `/ticket-creator`. The phase-specific logic (which still applies whenever `REPOS_FROM_COMMENT` is empty) differs depending on whether `MARKER_FOUND` is true (implementation phase) or false (research phase):
 
    **Known-repo list** (checked case-insensitively, in priority order — more specific names first):
    - `portal-react-boattrader`
+   - `portal-nextjs-platform`
    - `webapp-react-trident`
    - `api-node-boats`
    - `api-node-boattrader`
+   - `boatsdotcom`
    - `lambda-node-trident-700credit`
    - `lambda-node-trident-advertised-rates`
    - `lambda-node-trident-portal-lead`
    - `lambda-node-trident-partner-lender`
+   - `lambda-node-trident-services`
    - `pp-algorithm`
    - `configd`
    - `terraform-stack-trident`
@@ -73,10 +83,43 @@ The response contains at least ONE ticket whose `fields.status.name == "In Progr
    2. **If no repos were found in those sections**, fall back to scanning the full description + summary (same as the research-phase logic) and take **all** matches (not just the first).
 
    3. **If still no repos found**, and the ticket gives no clear signal:
-      - If running **interactively**, use `AskUserQuestion` with the message: `"<TICKET-KEY>: I couldn't determine which repo(s) this ticket targets from the description. Which repo(s) should I create implementation worktrees in? (comma-separated, e.g. webapp-react-trident, api-node-boattrader)"`. Use the operator's answer verbatim, matching each entry against the known-repo list. If an entry doesn't match any known repo, note it in `actionsTaken` and skip creating a worktree for it.
+      - If running **interactively**, use `AskUserQuestion` with the message: `"<TICKET-KEY>: I couldn't determine which repo(s) this ticket targets from the description. Which repo(s) should I create implementation worktrees in? (comma-separated, e.g. webapp-react-trident, api-node-boattrader)"`. Use the operator's answer verbatim, matching each entry against the known-repo list. If an entry doesn't match any known repo, check disk before giving up on it — same fallback as step 3.5: `test -d ~/BOATS-GROUP-PROJECTS-GITHUB/<name>`. If the directory exists, keep it (informational note in `actionsTaken`, same wording as step 3.5). Only if it doesn't exist either, note it in `actionsTaken` and skip creating a worktree for it.
       - If running **autonomously** (autonomous mode — though Rule D is normally skipped there), default to `webapp-react-trident` and note the fallback.
 
-   **Disk-path existence check (applies regardless of which path above set `TARGET_REPOS`** — the `REPOS_FROM_COMMENT` shortcut, or the legacy 3-step scan): remove duplicates, then for each repo in `TARGET_REPOS`, if its resolved path (`~/BOATS-GROUP-PROJECTS-GITHUB/<repo>`) does not exist on disk, append `"Implementation kickoff skipped for <repo> — not found at <path>"` to `actionsTaken` and remove it from `TARGET_REPOS`. If `TARGET_REPOS` is empty after removals, halt Rule D for this ticket.
+   **Disk-path existence check (applies regardless of which path above set `TARGET_REPOS`** — the `REPOS_FROM_COMMENT` shortcut, or the legacy 3-step scan): remove duplicates, then for each repo in `TARGET_REPOS`, if its resolved path (`~/BOATS-GROUP-PROJECTS-GITHUB/<repo>`) does not exist on disk:
+   - **If this repo's `IS_NEW_REPO` flag is true** (tagged `(new)` in the Repos-Involved comment): run the **New-repo bootstrap** procedure below instead of skipping it. On success, the path now exists and the repo stays in `TARGET_REPOS`. On failure, the bootstrap procedure itself records the `actionsTaken`/`REMINDERS` entries and removes the repo from `TARGET_REPOS`.
+   - **Otherwise** (legacy behavior, unchanged): append `"Implementation kickoff skipped for <repo> — not found at <path>"` to `actionsTaken` and remove it from `TARGET_REPOS`.
+
+   If `TARGET_REPOS` is empty after removals, halt Rule D for this ticket.
+
+   #### New-repo bootstrap (only for repos with `IS_NEW_REPO == true` whose path doesn't exist yet)
+
+   `/ticket-creator` tags a repo `(new)` in its Repos Involved comment when the repo doesn't exist yet and must be created from scratch. Run this sequence once per such repo, in order, before doing anything else with it:
+
+   1. **Create the base directory** (not a worktree yet — this becomes the repo's own root checkout, the same role `~/BOATS-GROUP-PROJECTS-GITHUB/<repo>` plays for every other repo):
+      ```
+      mkdir -p ~/BOATS-GROUP-PROJECTS-GITHUB/<repo>
+      ```
+      (standalone Bash.)
+
+   2. **Create the actual GitHub repo.** Invoke the `create-boatsgroup-repo` skill with the repo name as its argument, and **wait for it to finish** — do not proceed to step 3 until it returns. Confirm it actually reports a created repo URL (`https://github.com/boatsgroup/<repo>`) before continuing.
+      - **If it reports the name is already taken:** the `(new)` tag was stale — the repo actually already exists on GitHub (created by someone/something else since the ticket was made). Skip step 3's `git init` + push entirely and instead run `git -C ~/BOATS-GROUP-PROJECTS-GITHUB/<repo> clone git@github.com:boatsgroup/<repo>.git ~/BOATS-GROUP-PROJECTS-GITHUB/<repo>` to pull down whatever's already there — do NOT force an unrelated fresh history over an existing remote. Then go straight to step 4.
+      - **Any other failure:** append `"<TICKET-KEY> [<repo>]: tagged (new) but automated repo creation failed (<error>) — worktree not created. Create the repo manually, then re-run."` to `actionsTaken` and `REMINDERS`. Remove this repo from `TARGET_REPOS` and skip the rest of this bootstrap for it.
+
+   3. **Seed the first commit and push `main`** (each a standalone Bash call — never `&&`, never shell redirection, per this skill's own Bash safety rules):
+      - Write `~/BOATS-GROUP-PROJECTS-GITHUB/<repo>/README.md` (via the Write tool, not `echo`) with content `# <repo>`.
+      - `git -C ~/BOATS-GROUP-PROJECTS-GITHUB/<repo> init`
+      - `git -C ~/BOATS-GROUP-PROJECTS-GITHUB/<repo> add README.md`
+      - `git -C ~/BOATS-GROUP-PROJECTS-GITHUB/<repo> commit -m "first commit"`
+      - `git -C ~/BOATS-GROUP-PROJECTS-GITHUB/<repo> branch -M main`
+      - `git -C ~/BOATS-GROUP-PROJECTS-GITHUB/<repo> remote add origin git@github.com:boatsgroup/<repo>.git`
+      - `git -C ~/BOATS-GROUP-PROJECTS-GITHUB/<repo> push -u origin main`
+
+      If any of these fail, append `"<TICKET-KEY> [<repo>]: tagged (new), repo created on GitHub, but first-commit push failed at '<command>': <error>. Repo exists but has no main branch yet — resolve manually, then re-run."` to `actionsTaken` and `REMINDERS`. Remove this repo from `TARGET_REPOS`.
+
+   4. **Fall through to normal worktree creation.** `~/BOATS-GROUP-PROJECTS-GITHUB/<repo>` is now a real repo with `main` pushed to `origin` — proceed exactly as for any pre-existing repo (the branch-wiring and `open-claude-session.sh` steps in 6a/6b below, unchanged).
+
+   **Note (interactive mode only — this bootstrap can block on a live GitHub sign-in):** `create-boatsgroup-repo` opens a real, visible browser; if its persisted session has expired, it pauses waiting for the operator to complete SSO. That's fine here since Rule D never runs in autonomous mode (see "Autonomous mode" below). If it happens and no one's watching, this run simply sits blocked until someone notices and signs in — same tradeoff as every other operator-facing block in this skill.
 
 5. **Compute worktree paths.**
 
@@ -149,14 +192,15 @@ Let `IMPL_PATH = ~/BOATS-GROUP-PROJECTS-GITHUB/<repo>-<TICKET-KEY>` for the curr
 
    If the `worktree add` command fails for any reason (refs in use, permission denied, conflicting path), append to `actionsTaken`: `"Implementation kickoff skipped for <repo> — worktree creation failed: <verbatim error>"`. Print one terminal warning line. Move to the next repo in TARGET_REPOS.
 
-3. **Open a new Claude session in the worktree** via the helper script at `~/.claude/skills/jira-sprint-manager/open-claude-session.sh`, with the prompt prefixed by `/background` so the session moves into the background-agent view immediately instead of sitting as a foreground interactive tab, and `--session-name` set per step 5.6 (for the current repo in this loop iteration):
+3. **Open a new Claude session in the worktree** via the helper script at `~/.claude/skills/jira-sprint-manager/open-claude-session.sh`, with the prompt prefixed by `/background` so the session moves into the background-agent view immediately instead of sitting as a foreground interactive tab, `--session-name` set per step 5.6 (for the current repo in this loop iteration), and `--auto-close-on-background` so the launching tab doesn't sit idle once the handoff completes:
    ```
    ~/.claude/skills/jira-sprint-manager/open-claude-session.sh \
      <IMPL_PATH> \
      --prompt "/background /ticket-driver <TICKET-KEY>" \
-     --session-name "<TICKET-KEY>-<SEGMENT>"
+     --session-name "<TICKET-KEY>-<SEGMENT>" \
+     --auto-close-on-background
    ```
-   The script opens a new iTerm2 tab (in the existing iTerm2 window if one is open; Terminal.app fallback if iTerm2 isn't installed) in the worktree and starts a fresh `claude --name "<TICKET-KEY>-<SEGMENT>"` with `/background /ticket-driver <TICKET-KEY>` pre-submitted as the first message. `/background` moves that session into the background-agent view before `ticket-driver` starts running — the operator is still expected to be around and can still see it, respond to any permission prompts, and monitor progress there (e.g. via the agents list, now pre-named instead of showing a generic/AI-guessed title); it just isn't left occupying the one foreground tab, so the operator can keep working elsewhere while it runs.
+   The script opens a new iTerm2 tab (in the existing iTerm2 window if one is open; Terminal.app fallback if iTerm2 isn't installed) in the worktree and starts a fresh `claude --name "<TICKET-KEY>-<SEGMENT>"` with `/background /ticket-driver <TICKET-KEY>` pre-submitted as the first message. `/background` moves that session into the background-agent view before `ticket-driver` starts running — the operator is still expected to be around and can still see it, respond to any permission prompts, and monitor progress there (e.g. via the agents list, now pre-named instead of showing a generic/AI-guessed title); it just isn't left occupying the one foreground tab, so the operator can keep working elsewhere while it runs. `--auto-close-on-background` is the same mechanism `launch-pr-review-agent`, `launch-research-agent`, and `launch-resume-session` already use: once the `/background` handoff completes (Claude Code's own `backgrounded ·` line), `open-claude-session.sh` closes the now-idle launching tab automatically within a bounded ~20s window; if no handoff is detected in that window (slow startup, an auth prompt, or the dispatched command erroring before backgrounding), the tab is deliberately left open so the operator can see why — see that script's own header comment for the full mechanism.
 
    If the script's exit code is non-zero, append to `actionsTaken`: `"Worktree created at <IMPL_PATH> (<repo>) but open-claude-session failed: exit <code>"`. The worktree is preserved. Move to the next repo.
 
@@ -280,20 +324,22 @@ The research worktree uses a **separate branch** named `<TICKET-KEY>-research` s
      ```
      ~/.claude/skills/jira-sprint-manager/open-claude-session.sh \
        <RESEARCH_PATH> \
-       --prompt "/background /research SPIKE" \
+       --prompt "/background /research SPIKE <TICKET-KEY>" \
        --session-name "<TICKET-KEY>-SPIKE"
      ```
-     The `/background` prefix moves the session into the background-agent view immediately, same as Rule D's implementation-phase kickoff (6a) — the operator is still expected to be reachable, not unattended (see the note on 6a's kickoff for why this isn't "fire and forget"). `/research`'s own SPIKE mode (see its SKILL.md) recognizes the literal argument `SPIKE`, asks the operator **"What would you like me to research?"**, and treats their answer as the actual research topic for the rest of its normal workflow. A spike's research now runs through `/research`, not `/ticket-creator`.
+     The `/background` prefix moves the session into the background-agent view immediately, same as Rule D's implementation-phase kickoff (6a) — the operator is still expected to be reachable, not unattended (see the note on 6a's kickoff for why this isn't "fire and forget"). `/research`'s own SPIKE mode (see its SKILL.md) recognizes the literal argument `SPIKE`, optionally followed by a ticket key, asks the operator **"What would you like me to research?"**, and treats their answer as the actual research topic for the rest of its normal workflow. A spike's research now runs through `/research`, not `/ticket-creator`. **The trailing `<TICKET-KEY>` is load-bearing, not decoration** — it's what lets `/research` fold its finished `file`/`artifact` back into this same ticket's `sessions.md` record once it's done (see step 5 below and `/research`'s own "SPIKE ticket-key fold-back" section). Omitting it would silently regress to the old behavior where that record never gets the real output attached.
 
    If the script's exit code is non-zero (either branch), append to `actionsTaken`: `"Research worktree created at <RESEARCH_PATH> but open-claude-session failed: exit <code>"` and continue with the rest of the workflow. The worktree is preserved either way.
 
 4. On success, append to `actionsTaken`:
    - Non-SPIKE: `"Created research worktree at <RESEARCH_PATH> and opened a backgrounded Claude session named '<TICKET-KEY>-<SEGMENT>' with prompt: /background /ticket-creator"`.
-   - SPIKE: `"Created research worktree at <RESEARCH_PATH> and opened a backgrounded Claude session named '<TICKET-KEY>-SPIKE' with prompt: /background /research SPIKE"`.
+   - SPIKE: `"Created research worktree at <RESEARCH_PATH> and opened a backgrounded Claude session named '<TICKET-KEY>-SPIKE' with prompt: /background /research SPIKE <TICKET-KEY>"`.
 
    Both are the literal, verbatim prompt string passed to `--prompt` — not a paraphrase. **Also print the exact prompt string in your terminal response at the time you make the call**, same as the implementation-phase kickoff above — don't leave it only in the report file.
 
-5. **If `IS_SPIKE == true`, log this worktree to `~/.claude/memory/sessions.md`** — same file, same entry format, and same insertion rules `ticket-creation` (in `ticket-creator`) and `ticket-driver` already use for their own bookkeeping. This exists because a SPIKE's entire lifecycle can consist of just this one research worktree — 6a-spike (the spike-close phase) never creates a worktree or opens a session, and (unlike `/ticket-creator`) `/research` never logs itself to `sessions.md` at all under any circumstance — it only logs to its own `~/.claude/memory/research/index.md`. So this step is the ONLY place a spike's research worktree ever gets recorded in `sessions.md`. Non-spike tickets aren't logged here — their research worktree still gets recorded once, later, when the spawned `/ticket-creator` session reaches its own Step 5 logging.
+5. **If `IS_SPIKE == true`, log this worktree to `~/.claude/memory/sessions.md`** — same file, same entry format, and same insertion rules `ticket-creation` (in `ticket-creator`) and `ticket-driver` already use for their own bookkeeping. This exists because a SPIKE's entire lifecycle can consist of just this one research worktree — 6a-spike (the spike-close phase) never creates a worktree or opens a session, and this step gets a **ticket-keyed** `# <TICKET-KEY>` placeholder entry into `sessions.md` immediately, before the spawned research session even exists.
+
+   **This is a placeholder, not the final record — `/research` completes it.** At this point jira-sprint-manager doesn't have the spawned session's UUID yet (its `claude` process hasn't started), so step 1 below logs jira-sprint-manager's OWN session id as a stand-in, with no `file`/`artifact` fields (nothing to attach yet). Because the launched prompt is `/background /research SPIKE <TICKET-KEY>` (see step 3 above — the trailing ticket key is load-bearing), the spawned `/research` session knows which ticket this is for, and its own "SPIKE ticket-key fold-back" step (see `/research`'s SKILL.md, under **Sessions log**) goes back to this exact subentry once it finishes and overwrites `session id:` with its own real UUID plus adds `file:`/`artifact:` — so the finished record ends up both correctly resumable (the real research session, not jira-sprint-manager's) and carrying the real output. `/research` ALSO writes its own separate `# Research Agent: <SHORT_DESCRIPTION>` entry as it always does — that's an intentional second index by topic, not a duplicate of this one. Non-spike tickets don't have any of this back-and-forth — their research worktree runs `/ticket-creator`, which logs a single, already-complete ticket-keyed entry itself, later, at its own Step 5.
 
    1. **Get the current Claude session ID** — Run `ls -t ~/.claude/projects/` (standalone Bash, no pipes) to find the most-recently-modified project subdirectory. Then run `ls -t ~/.claude/projects/<that-subdir>/`; the first `.jsonl` filename (minus the `.jsonl` extension) is the current session UUID. **This is jira-sprint-manager's OWN running session** — the newly spawned session in the worktree doesn't have a UUID yet (its `claude` process hasn't started), so there is nothing else to log here.
    2. **Repo/dir** — the basename of `RESEARCH_PATH` (already computed earlier in this rule) — e.g. `webapp-react-trident-TRIDENT-950-research`. No need to `git rev-parse`; jira-sprint-manager isn't running from inside that worktree.
@@ -319,9 +365,14 @@ The research worktree uses a **separate branch** named `<TICKET-KEY>-research` s
 ## Failure modes summary
 
 - Comments fetch fails → append to `actionsTaken`: `"Implementation kickoff skipped — Jira comment fetch failed: <error>"` (the same error path covers all three phases; the phase is reflected in the worktree path mentioned in subsequent actions, or in the lack of one for spike-close). This also means `REPOS_FROM_COMMENT` can never be computed, so repo determination falls all the way through to the legacy text-scan/ask-operator logic if the rule proceeds at all.
-- **Repos-comment has an unrecognized entry** (step 3.5) → append `"Repos-comment listed unrecognized repo '<name>' for <TICKET-KEY> — skipped"` to `actionsTaken` and drop that entry from `REPOS_FROM_COMMENT`. The other, recognized entries are still used. If ALL entries are unrecognized, `REPOS_FROM_COMMENT` is empty and step 4 falls through to the legacy scan for that ticket.
-- Repo path not found → append `"Implementation kickoff skipped for <repo> — not found at <path>"` to `actionsTaken` and remove it from `TARGET_REPOS`. If `TARGET_REPOS` becomes empty, halt Rule D for this ticket. (For SPIKE tickets the repo isn't strictly needed since no worktree is created, but the repo-not-found check still runs in step 4 before the SPIKE-detection branch — treat the skip as a deliberate guard rather than a bug.) This check runs whether `TARGET_REPOS` came from `REPOS_FROM_COMMENT` or the legacy scan.
-- **Repo ambiguity (implementation phase only, interactive, and only reached when `REPOS_FROM_COMMENT` is empty)** — if the scan in step 4b yields no repos and no default is appropriate, `AskUserQuestion` is used exactly once per ticket to ask which repos apply. If the operator's answer names a repo not in the known-repo list, append `"Unrecognised repo <name> from operator — skipped"` to `actionsTaken` and omit it.
+- **Repos-comment has an entry not in the known-repo list** (step 3.5) → check disk first: if `~/BOATS-GROUP-PROJECTS-GITHUB/<name>` exists, keep the entry and append an informational (non-skip) note to `actionsTaken` — the other, recognized entries are used either way. Only when the directory does NOT exist does Rule D drop it: append `"Repos-comment listed unrecognized repo '<name>' for <TICKET-KEY> — skipped (not in known-repo list and no matching directory on disk)"` to `actionsTaken`. If ALL entries end up dropped this way, `REPOS_FROM_COMMENT` is empty and step 4 falls through to the legacy scan for that ticket.
+- Repo path not found, and NOT tagged `(new)` → append `"Implementation kickoff skipped for <repo> — not found at <path>"` to `actionsTaken` and remove it from `TARGET_REPOS`. If `TARGET_REPOS` becomes empty, halt Rule D for this ticket. (For SPIKE tickets the repo isn't strictly needed since no worktree is created, but the repo-not-found check still runs in step 4 before the SPIKE-detection branch — treat the skip as a deliberate guard rather than a bug.) This check runs whether `TARGET_REPOS` came from `REPOS_FROM_COMMENT` or the legacy scan.
+- **Repo path not found, but tagged `(new)`** → runs the New-repo bootstrap (step 4) instead of skipping:
+  - `create-boatsgroup-repo` fails (not "name already taken") → append `"<TICKET-KEY> [<repo>]: tagged (new) but automated repo creation failed (<error>) — worktree not created. Create the repo manually, then re-run."` to `actionsTaken` and `REMINDERS`; remove the repo from `TARGET_REPOS`.
+  - `create-boatsgroup-repo` reports the name is already taken (stale tag) → clone the existing remote instead of `init`+push, then continue normally — no failure entry needed.
+  - First-commit push fails after the repo was created → append `"<TICKET-KEY> [<repo>]: tagged (new), repo created on GitHub, but first-commit push failed at '<command>': <error>. Repo exists but has no main branch yet — resolve manually, then re-run."` to `actionsTaken` and `REMINDERS`; remove the repo from `TARGET_REPOS`.
+  - Bootstrap succeeds → no failure entry; the repo proceeds through the normal worktree-creation flow as if it had always existed.
+- **Repo ambiguity (implementation phase only, interactive, and only reached when `REPOS_FROM_COMMENT` is empty)** — if the scan in step 4b yields no repos and no default is appropriate, `AskUserQuestion` is used exactly once per ticket to ask which repos apply. If the operator's answer names a repo not in the known-repo list, check disk (same fallback as step 3.5) before dropping it; only if no matching directory exists either does Rule D append `"Unrecognised repo <name> from operator — skipped"` to `actionsTaken` and omit it.
 - **Implementation phase (6a) — per-repo failure is non-fatal:**
   - Worktree creation fails for one repo → append `"Implementation kickoff skipped for <repo> — worktree creation failed: <error>"` and move to the next repo. The other repos are still processed.
   - Worktree created but open-claude-session script fails → append `"Worktree created at <IMPL_PATH> (<repo>) but open-claude-session failed: exit <code>"` and move to the next repo. The worktree is preserved.

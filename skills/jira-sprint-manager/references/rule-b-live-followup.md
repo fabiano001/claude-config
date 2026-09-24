@@ -10,6 +10,8 @@ Rule B is ALSO invoked via the **Rule C → Rule B back-edge chain** on any tick
 
 ## Per-Live-ticket handling (apply in board order — top of the Live lane first; chained tickets are appended to the end of the per-rule iteration after the forward-sweep Live tickets are done)
 
+0. **Universal flag gate (runs first, before anything else, for every ticket including chained ones).** Check `fields.customfield_10091` (see SKILL.md Step 2 for the pinned field id and the 2026-05-20 incident — never use the short name `flagged`). If non-empty, this ticket is a complete no-op for Rule B this run: do not fetch comments, do not queue a question, do not transition anything. Append exactly one `REMINDERS` entry: `"<TICKET-KEY> is flagged (impediment) — Rule B made no changes, actions, or transitions. Clear the flag or unblock the impediment before next run if it's now actionable."` Then move on to the next Live ticket. This applies even to a ticket reached via the Rule C → Rule B chain — re-check the flag on the chained ticket too; do not assume Rule C already verified it (Rule C's own flag gate covers Rule C's own actions, not Rule B's).
+
 1. **Fetch the ticket's comments.** Use `mcp__atlassian__getJiraIssue` with:
    - `cloudId`: `ba2e3477-a4e5-4924-a530-47c471494d0f`
    - `issueIdOrKey`: the ticket key
